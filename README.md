@@ -19,6 +19,8 @@ nessuna dipendenza esterna, app non sandboxed, daemon `launchd` installato con
 make test   # verifica la logica di pianificazione e la generazione del plist
 make app    # crea build/TimeMachineScheduler.app
 make run    # apre l'app
+make dmg    # crea build/TimeMachineScheduler-1.0.dmg
+make install  # copia in /Applications e toglie la quarantena
 ```
 
 Se dopo una modifica dell'icona il Dock mostra ancora quella vecchia, macOS sta
@@ -27,6 +29,33 @@ usando la cache di LaunchServices:
 ```bash
 make refresh-icon
 ```
+
+Il DMG contiene l'app e il collegamento alla cartella **Applications**: si apre,
+si trascina l'app e si espelle il disco.
+
+### Gatekeeper
+
+L'app è firmata ad-hoc, non con un Developer ID e non è notarizzata. Su macOS
+recente il doppio clic sul DMG può mostrare «Installazione non riuscita» perché
+l'installazione automatica richiede una firma verificabile.
+
+Installazione locale senza Gatekeeper:
+
+```bash
+make install
+# oppure in una cartella utente:
+make install PREFIX=~/Applications
+```
+
+Se il DMG è stato scaricato, togli la quarantena prima di aprirlo:
+
+```bash
+xattr -d com.apple.quarantine ~/Downloads/TimeMachineScheduler-1.0.dmg
+```
+
+Per un DMG apribile con doppio clic su altri Mac serve una firma **Developer ID
+Application** e la notarizzazione Apple; con il solo certificato Apple Development
+Gatekeeper rifiuta comunque l'app.
 
 L'app può essere trascinata in `/Applications`. Per rimuoverla basta cancellarla:
 la configurazione di sistema si toglie dal pulsante **Ripristina…**.
@@ -57,7 +86,20 @@ Solo questi:
 - `/Library/LaunchDaemons/local.tmscheduler.nightly.plist`
 - `/usr/local/bin/tmscheduler-run`
 - preferenze `AutoBackup` / `AutoBackupInterval` di Time Machine (solo tramite
-  "Imposta su Manualmente" e "Ripristina…")
+  "Apri Impostazioni Time Machine" e "Ripristina…")
+
+## Lingue
+
+L'interfaccia, la guida e il pannello About sono disponibili in **italiano e inglese**
+e seguono la lingua di sistema; le altre lingue usano l'inglese. I messaggi tecnici
+del daemon (log e notifiche) sono in inglese.
+
+Per aggiungere una lingua: copia `Resources/en.lproj` in `Resources/<codice>.lproj`,
+traduci `Localizable.strings` e aggiungi il codice a `CFBundleLocalizations` in
+`Info.plist`.
+
+Le modifiche al daemon, compresi i messaggi di log, si applicano premendo di nuovo
+**Salva pianificazione**.
 
 ## Limiti noti
 
@@ -77,8 +119,8 @@ Solo questi:
 - [ ] `sudo launchctl kickstart -k system/local.tmscheduler.nightly` avvia il backup
       e il log registra inizio/fine.
 - [ ] Con la destinazione Time Machine spenta o irraggiungibile, il daemon scrive
-      `skip: destinazione … non raggiungibile` e non avvia Time Machine.
-- [ ] Con un backup già in corso, il daemon scrive `skip: backup già in corso`.
+      `skip: destination … unreachable` e non avvia Time Machine.
+- [ ] Con un backup già in corso, il daemon scrive `skip: backup already running`.
 - [ ] Cambiando ora/giorni dall'app, il plist viene rigenerato e il job ricaricato.
 - [ ] Con l'interruttore OFF, il job non parte.
 - [ ] **Ripristina…** rimuove plist e script e riporta `AutoBackup`/`AutoBackupInterval`
@@ -92,7 +134,7 @@ Solo questi:
 ```
 App/        UI SwiftUI, modello, controller tmutil, installer
 Daemon/     script eseguito dal LaunchDaemon
-Resources/  icona sorgente 1024×1024
+Resources/  icona sorgente e localizzazioni it/en
 Tools/      generatore dell'icona (Core Graphics)
 Tests/      test della logica pura (pianificazione + plist)
 Info.plist  metadati del bundle

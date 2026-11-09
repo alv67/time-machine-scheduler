@@ -12,42 +12,42 @@ struct HelpView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Time Machine Scheduler")
                             .font(.title2.bold())
-                        Text("Pianificazione dei backup di Time Machine")
+                        Text("help.subtitle")
                             .font(.callout)
                             .foregroundStyle(.secondary)
                     }
                 }
 
-                section("Pianificazione", [
-                    "Scegli l'ora di avvio e i giorni, poi premi «Salva pianificazione». L'installazione del daemon richiede la password di amministratore.",
-                    "Se Time Machine ha una frequenza automatica attiva, il banner in alto apre le Impostazioni di Sistema: scegli «Manualmente» per evitare backup doppi.",
+                section("help.schedule.title", [
+                    "help.schedule.1",
+                    "help.schedule.2",
                 ])
 
-                section("Opzioni", [
-                    "«Avvia solo se la destinazione è raggiungibile» controlla l'host della destinazione configurata in Time Machine (letta da tmutil), non un indirizzo fisso.",
-                    "«Impedisci il sonno» usa caffeinate -i durante il backup.",
-                    "«Salta se il Mac è a batteria» evita il backup quando il Mac non è collegato alla corrente.",
-                    "«Notifica a fine backup» mostra una notifica di sistema.",
+                section("help.options.title", [
+                    "help.options.1",
+                    "help.options.2",
+                    "help.options.3",
+                    "help.options.4",
                 ])
 
-                section("Backup e log", [
-                    "«Backup ora» avvia subito un backup fuori pianificazione.",
-                    "Il log mostra gli ultimi 200 eventi e ruota automaticamente a 1 MB (3 file).",
+                section("help.backup.title", [
+                    "help.backup.1",
+                    "help.backup.2",
                 ])
 
-                section("Ripristino", [
-                    "«Ripristina…» rimuove daemon, script e log e riporta Time Machine alla frequenza scelta. Se macOS non applica la modifica, l'app apre le Impostazioni e lo segnala.",
+                section("help.restore.title", [
+                    "help.restore.1",
                 ])
 
-                section("Limiti", [
-                    "Un Mac spento non può essere acceso da nessuna pianificazione (Apple Silicon).",
-                    "caffeinate non impedisce il sonno con il coperchio chiuso.",
-                    "La finestra dell'app può essere chiusa: il daemon continua a funzionare.",
+                section("help.limits.title", [
+                    "help.limits.1",
+                    "help.limits.2",
+                    "help.limits.3",
                 ])
 
                 Divider()
 
-                Link("Pagina GitHub del progetto", destination: ProjectLinks.repository)
+                Link("help.github", destination: ProjectLinks.repository)
                     .font(.callout)
             }
             .padding(20)
@@ -57,15 +57,15 @@ struct HelpView: View {
         .frame(width: 620, height: 560)
     }
 
-    private func section(_ title: String, _ items: [String]) -> some View {
+    private func section(_ title: LocalizedStringKey, _ items: [LocalizedStringKey]) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
                 .font(.headline)
-            ForEach(items, id: \.self) { item in
+            ForEach(items.indices, id: \.self) { index in
                 HStack(alignment: .top, spacing: 6) {
                     Text("•")
                         .foregroundStyle(.secondary)
-                    Text(item)
+                    Text(items[index])
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }

@@ -25,7 +25,13 @@ enum Paths {
 }
 
 enum ScheduleLogic {
-    static let weekdayNames = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"]
+    /// Abbreviazioni dei giorni nel locale di sistema, in ordine ISO (lun … dom).
+    static var weekdayNames: [String] {
+        let symbols = Calendar.current.shortWeekdaySymbols
+        return (1...7).map { iso in
+            symbols[iso == 7 ? 0 : iso].capitalized
+        }
+    }
 
     /// launchd usa tm_wday: 0 = domenica … 6 = sabato.
     static func launchdWeekday(iso: Int) -> Int {

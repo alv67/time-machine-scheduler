@@ -6,7 +6,7 @@ enum InstallerError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .cancelled: return "Operazione annullata."
+        case .cancelled: return L("error.cancelled")
         case .failed(let message): return message
         }
     }
@@ -19,10 +19,10 @@ enum RestoreFrequency: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .manual: return "Manualmente"
-        case .hourly: return "Ogni ora"
-        case .daily: return "Ogni giorno"
-        case .weekly: return "Ogni settimana"
+        case .manual: return L("frequency.manual")
+        case .hourly: return L("frequency.hourly")
+        case .daily: return L("frequency.daily")
+        case .weekly: return L("frequency.weekly")
         }
     }
 
@@ -46,7 +46,7 @@ enum SchedulerInstaller {
         defer { try? fileManager.removeItem(at: temp) }
 
         guard let scriptURL = Bundle.main.url(forResource: "tmscheduler-run", withExtension: "sh") else {
-            throw InstallerError.failed("Risorsa tmscheduler-run.sh mancante nell'app.")
+            throw InstallerError.failed(L("error.missingScript"))
         }
 
         let encoder = JSONEncoder()

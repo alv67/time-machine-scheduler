@@ -15,7 +15,7 @@ final class HelpWindowController {
                 backing: .buffered,
                 defer: false
             )
-            window.title = "Aiuto di Time Machine Scheduler"
+            window.title = L("help.window.title")
             window.contentView = NSHostingView(rootView: HelpView())
             window.isReleasedWhenClosed = false
             window.center()

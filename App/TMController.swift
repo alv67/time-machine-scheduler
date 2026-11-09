@@ -124,14 +124,14 @@ enum TMController {
             .replacingOccurrences(of: "\"", with: "\\\"")
         let source = "do shell script \"\(escaped)\" with administrator privileges"
         guard let script = NSAppleScript(source: source) else {
-            throw InstallerError.failed("Impossibile creare lo script di installazione.")
+            throw InstallerError.failed(L("error.scriptCreate"))
         }
         var error: NSDictionary?
         script.executeAndReturnError(&error)
         if let error {
             let code = error[NSAppleScript.errorNumber] as? Int ?? 0
             if code == -128 { throw InstallerError.cancelled }
-            let message = error[NSAppleScript.errorMessage] as? String ?? "Errore sconosciuto."
+            let message = error[NSAppleScript.errorMessage] as? String ?? L("error.unknown")
             throw InstallerError.failed(message)
         }
     }

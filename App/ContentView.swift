@@ -28,20 +28,20 @@ struct ContentView: View {
         .padding(20)
         .frame(width: 600)
         .onReceive(timer) { _ in model.refresh() }
-        .alert("Errore", isPresented: errorBinding) {
-            Button("OK", role: .cancel) {}
+        .alert("error.title", isPresented: errorBinding) {
+            Button("error.ok", role: .cancel) {}
         } message: {
             Text(model.errorMessage ?? "")
         }
-        .confirmationDialog("Ripristina configurazione", isPresented: $model.showRestoreDialog, titleVisibility: .visible) {
+        .confirmationDialog("restore.title", isPresented: $model.showRestoreDialog, titleVisibility: .visible) {
             ForEach(RestoreFrequency.allCases) { frequency in
-                Button("Rimuovi scheduler e imposta TM su «\(frequency.label)»") {
+                Button(L("restore.option", frequency.label)) {
                     model.restore(frequency: frequency)
                 }
             }
-            Button("Annulla", role: .cancel) {}
+            Button("restore.cancel", role: .cancel) {}
         } message: {
-            Text("Lo scheduler e il suo log verranno rimossi. Time Machine tornerà alla frequenza scelta.")
+            Text("restore.message")
         }
     }
 
@@ -50,7 +50,7 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Time Machine Scheduler")
                     .font(.title2.bold())
-                Text(model.installed ? "Daemon installato" : "Daemon non installato")
+                Text(model.installed ? L("app.subtitle.installed") : L("app.subtitle.notInstalled"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -67,14 +67,14 @@ struct ContentView: View {
             Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundStyle(.orange)
             VStack(alignment: .leading, spacing: 2) {
-                Text("Time Machine ha una frequenza automatica attiva (\(model.tmFrequencyText)).")
+                Text(L("banner.title", model.tmFrequencyText))
                     .font(.callout)
-                Text("Apri Impostazioni e scegli «Manualmente» per evitare backup doppi.")
+                Text("banner.hint")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            Button("Apri Impostazioni Time Machine") {
+            Button("banner.button") {
                 model.openTimeMachineSettings()
             }
         }
@@ -84,11 +84,11 @@ struct ContentView: View {
 
     private var scheduleSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Toggle("Pianificazione attiva", isOn: $model.config.enabled)
+            Toggle("schedule.enabled", isOn: $model.config.enabled)
                 .toggleStyle(.switch)
 
             HStack {
-                Text("Ora di avvio")
+                Text("schedule.time")
                 Spacer()
                 DatePicker("", selection: hourBinding, displayedComponents: .hourAndMinute)
                     .labelsHidden()
@@ -107,33 +107,33 @@ struct ContentView: View {
 
     private var optionsSection: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Opzioni")
+            Text("options.title")
                 .font(.headline)
-            Toggle("Avvia solo se la destinazione è raggiungibile", isOn: $model.config.requireDestination)
-            Toggle("Impedisci il sonno durante il backup", isOn: $model.config.preventSleep)
-            Toggle("Salta se il Mac è a batteria", isOn: $model.config.skipOnBattery)
-            Toggle("Notifica a fine backup", isOn: $model.config.notify)
+            Toggle("options.requireDestination", isOn: $model.config.requireDestination)
+            Toggle("options.preventSleep", isOn: $model.config.preventSleep)
+            Toggle("options.skipOnBattery", isOn: $model.config.skipOnBattery)
+            Toggle("options.notify", isOn: $model.config.notify)
         }
     }
 
     private var statusSection: some View {
         Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 5) {
-            statusRow("Ultimo backup", model.lastRunText)
-            statusRow("Prossimo backup", model.nextRunText)
-            statusRow("Destinazione Time Machine", model.destinationText)
-            statusRow("Stato Time Machine", model.tmStatusText)
-            statusRow("Frequenza Time Machine", model.tmFrequencyText)
+            statusRow("status.lastBackup", model.lastRunText)
+            statusRow("status.nextBackup", model.nextRunText)
+            statusRow("status.destination", model.destinationText)
+            statusRow("status.tmStatus", model.tmStatusText)
+            statusRow("status.frequency", model.tmFrequencyText)
         }
     }
 
     private var logSection: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Log")
+            Text("log.title")
                 .font(.headline)
             ScrollView {
                 VStack(alignment: .leading, spacing: 2) {
                     if model.logLines.isEmpty {
-                        Text("Nessun evento")
+                        Text("log.empty")
                             .font(.system(size: 10, design: .monospaced))
                             .foregroundStyle(.secondary)
                     } else {
@@ -156,13 +156,13 @@ struct ContentView: View {
 
     private var actionBar: some View {
         HStack {
-            Button("Backup ora") { model.backupNow() }
+            Button("button.backupNow") { model.backupNow() }
                 .disabled(model.tmStatus.running || model.busy)
-            Button("Apri log") { model.openLog() }
+            Button("button.openLog") { model.openLog() }
             Spacer()
-            Button("Ripristina…") { model.showRestoreDialog = true }
+            Button("button.restore") { model.showRestoreDialog = true }
                 .disabled(model.busy)
-            Button("Salva pianificazione") { model.apply() }
+            Button("button.save") { model.apply() }
                 .keyboardShortcut(.defaultAction)
                 .disabled(model.busy)
         }
@@ -209,9 +209,9 @@ struct ContentView: View {
         )
     }
 
-    private func statusRow(_ label: String, _ value: String) -> some View {
+    private func statusRow(_ labelKey: String, _ value: String) -> some View {
         GridRow {
-            Text(label)
+            Text(L(labelKey))
                 .foregroundStyle(.secondary)
                 .gridColumnAlignment(.leading)
             Text(value)

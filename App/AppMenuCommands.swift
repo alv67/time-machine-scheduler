@@ -8,15 +8,15 @@ enum ProjectLinks {
 struct AppMenuCommands: Commands {
     var body: some Commands {
         CommandGroup(replacing: .appInfo) {
-            Button("Informazioni su Time Machine Scheduler") {
+            Button("menu.about") {
                 AboutPanel.show()
             }
         }
         CommandGroup(replacing: .help) {
-            Button("Aiuto di Time Machine Scheduler") {
+            Button("menu.help") {
                 HelpWindowController.shared.show()
             }
-            Button("Pagina GitHub del progetto") {
+            Button("menu.github") {
                 NSWorkspace.shared.open(ProjectLinks.repository)
             }
         }
@@ -30,7 +30,7 @@ enum AboutPanel {
         let build = info?["CFBundleVersion"] as? String ?? "1"
 
         let credits = NSMutableAttributedString(
-            string: "Pianifica i backup di Time Machine\na giorni e orari precisi.\n\nUsa tmutil e launchd,\nsenza modificare Time Machine.\n\n",
+            string: L("about.credits"),
             attributes: [
                 .font: NSFont.systemFont(ofSize: 11),
                 .foregroundColor: NSColor.secondaryLabelColor,
@@ -47,7 +47,7 @@ enum AboutPanel {
         NSApplication.shared.orderFrontStandardAboutPanel(options: [
             .applicationName: "Time Machine Scheduler",
             .applicationVersion: version,
-            .version: "Build \(build)",
+            .version: L("about.build", build),
             .applicationIcon: AppIcon.image,
             .credits: credits,
         ])

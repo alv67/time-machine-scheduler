@@ -3,15 +3,16 @@ import Foundation
 
 private let lastRunFormatter: DateFormatter = {
     let formatter = DateFormatter()
-    formatter.locale = Locale(identifier: "it_IT")
-    formatter.dateFormat = "d MMM yyyy, HH:mm"
+    formatter.locale = .current
+    formatter.dateStyle = .medium
+    formatter.timeStyle = .short
     return formatter
 }()
 
 private let dayFormatter: DateFormatter = {
     let formatter = DateFormatter()
-    formatter.locale = Locale(identifier: "it_IT")
-    formatter.dateFormat = "EEEE d MMMM"
+    formatter.locale = .current
+    formatter.setLocalizedDateFormatFromTemplate("EEEEdMMMM")
     return formatter
 }()
 
@@ -56,7 +57,7 @@ final class SchedulerModel: ObservableObject {
 
     func apply() {
         if config.enabled && config.weekdays.isEmpty {
-            errorMessage = "Seleziona almeno un giorno della settimana."
+            errorMessage = L("error.noWeekday")
             return
         }
         busy = true
@@ -77,7 +78,7 @@ final class SchedulerModel: ObservableObject {
                 self?.refresh()
             }
         } catch {
-            errorMessage = "Impossibile avviare il backup: \(error.localizedDescription)"
+            errorMessage = L("error.backupStart", error.localizedDescription)
         }
     }
 
@@ -96,7 +97,7 @@ final class SchedulerModel: ObservableObject {
             refresh()
             if tmAutoBackup != frequency.autoBackup {
                 openTimeMachineSettings()
-                errorMessage = "Lo scheduler è stato rimosso, ma Time Machine non ha applicato «\(frequency.label)». Impostalo nella pagina appena aperta."
+                errorMessage = L("error.restoreFrequency", frequency.label)
             }
         } catch {
             errorMessage = error.localizedDescription
@@ -113,62 +114,63 @@ final class SchedulerModel: ObservableObject {
     }
 
     var nextRunText: String {
-        guard config.enabled else { return "Pianificazione disattivata" }
+        guard config.enabled else { return L("next.disabled") }
         guard let next = ScheduleLogic.nextRun(after: Date(), config: config) else { return "—" }
         let time = String(format: "%02d:%02d", config.hour, config.minute)
         let calendar = Calendar.current
-        if calendar.isDateInToday(next) { return "oggi alle \(time)" }
-        if calendar.isDateInTomorrow(next) { return "domani alle \(time)" }
-        return "\(dayFormatter.string(from: next)) alle \(time)"
+        if calendar.isDateInToday(next) { return L("next.today", time) }
+        if calendar.isDateInTomorrow(next) { return L("next.tomorrow", time) }
+        return L("next.date", dayFormatter.string(from: next), time)
     }
 
     var lastRunText: String {
-        guard let lastRun else { return "Nessun backup registrato" }
-        let result: String
+        guard let lastRun else { return L("lastRun.none") }
+        let resultKey: String
         switch lastRun.result {
-        case "success": result = "riuscito"
-        case "failed": result = "fallito"
-        default: result = lastRun.result
+        case "success": resultKey = "lastRun.success"
+        case "failed": resultKey = "lastRun.failed"
+        case "running": resultKey = "lastRun.running"
+        default: resultKey = "lastRun.result.unknown"
         }
-        var text = "\(lastRunFormatter.string(from: lastRun.date)) · \(result)"
-        if let duration = lastRun.durationSeconds, result != "in corso" {
+        var text = L("lastRun.format", lastRunFormatter.string(from: lastRun.date), L(resultKey))
+        if let duration = lastRun.durationSeconds, lastRun.result != "running" {
             let minutes = duration / 60
-            text += minutes > 0 ? " · \(minutes) min" : " · \(duration) s"
+            text += minutes > 0 ? L("lastRun.minutes", minutes) : L("lastRun.seconds", duration)
         }
         return text
     }
 
     var tmStatusText: String {
-        guard tmStatus.running else { return "Inattivo" }
+        guard tmStatus.running else { return L("phase.idle") }
         var text: String
         switch tmStatus.phase {
-        case "FindingChanges": text = "Ricerca modifiche"
-        case "Copying": text = "Copia in corso"
-        case "HealthCheckFsck": text = "Verifica disco"
-        case "Stopping": text = "Arresto"
+        case "FindingChanges": text = L("phase.findingChanges")
+        case "Copying": text = L("phase.copying")
+        case "HealthCheckFsck": text = L("phase.healthCheck")
+        case "Stopping": text = L("phase.stopping")
         case let phase?: text = phase
-        case nil: text = "In corso"
+        case nil: text = L("phase.running")
         }
         if let percent = tmStatus.percent, percent >= 0 {
-            text += String(format: " · %.0f%%", percent)
+            text += L("phase.percent", percent)
         }
         return text
     }
 
     var destinationText: String {
-        guard let destination else { return "Nessuna destinazione configurata" }
-        let kind = destination.kind == "Network" ? "rete" : "locale"
-        return "\(destination.name) · \(kind) · \(destination.host ?? destination.url)"
+        guard let destination else { return L("destination.none") }
+        let kind = destination.kind == "Network" ? L("destination.network") : L("destination.local")
+        return L("destination.format", destination.name, kind, destination.host ?? destination.url)
     }
 
     var tmFrequencyText: String {
-        guard tmAutoBackup else { return "Manualmente" }
+        guard tmAutoBackup else { return L("frequency.manual") }
         switch tmInterval {
-        case 3600: return "Ogni ora"
-        case 86400: return "Ogni giorno"
-        case 604800: return "Ogni settimana"
-        case let interval?: return "Ogni \(interval) s"
-        case nil: return "Automatica"
+        case 3600: return L("frequency.hourly")
+        case 86400: return L("frequency.daily")
+        case 604800: return L("frequency.weekly")
+        case let interval?: return L("frequency.everySeconds", interval)
+        case nil: return L("frequency.automatic")
         }
     }
 }

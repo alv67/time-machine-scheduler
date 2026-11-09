@@ -110,7 +110,7 @@ esac
 
 if [ "$SKIP_BATTERY" = "true" ] && /usr/bin/pmset -g batt | /usr/bin/grep -q 'Battery Power'; then
     rotate_log
-    log "skip: Mac a batteria"
+    log "skip: Mac is on battery"
     exit 0
 fi
 
@@ -121,19 +121,19 @@ if [ "$REQUIRE_DEST" = "true" ]; then
     DEST_HOST="$(destination_host)"
     if [ -z "$DEST_KIND" ]; then
         rotate_log
-        log "skip: nessuna destinazione Time Machine configurata"
+        log "skip: no Time Machine destination configured"
         exit 0
     fi
     if [ "$DEST_KIND" = "Network" ] && ! destination_reachable "$DEST_HOST"; then
         rotate_log
-        log "skip: destinazione $DEST_HOST non raggiungibile"
+        log "skip: destination $DEST_HOST unreachable"
         exit 0
     fi
 fi
 
 if /usr/bin/tmutil status -X 2>/dev/null | /usr/bin/plutil -extract Running raw -o - - 2>/dev/null | /usr/bin/grep -q true; then
     rotate_log
-    log "skip: backup già in corso"
+    log "skip: backup already running"
     exit 0
 fi
 
@@ -154,10 +154,10 @@ DURATION=$((END - START))
 
 if [ "$RC" -eq 0 ]; then
     write_state success "$DURATION"
-    log "end: success durata=${DURATION}s"
-    [ "$DO_NOTIFY" = "true" ] && notify "Backup completato in ${DURATION}s"
+    log "end: success duration=${DURATION}s"
+    [ "$DO_NOTIFY" = "true" ] && notify "Backup completed in ${DURATION}s"
 else
     write_state failed "$DURATION"
-    log "end: failed rc=$RC durata=${DURATION}s"
-    [ "$DO_NOTIFY" = "true" ] && notify "Backup fallito (rc=$RC)"
+    log "end: failed rc=$RC duration=${DURATION}s"
+    [ "$DO_NOTIFY" = "true" ] && notify "Backup failed (rc=$RC)"
 fi
