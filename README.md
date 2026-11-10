@@ -27,6 +27,10 @@ according to `time-machine-scheduler-app-spec.md`: macOS 14+, SwiftUI, no extern
 dependencies, non-sandboxed app, `launchd` daemon installed with `osascript` and
 admin privileges (approach A).
 
+![Time Machine Scheduler — schedule, options and status](docs/assets/screenshots/en/app.png)
+
+*Schedule, options, last and next backup, and a readable log in one window.*
+
 ## Features
 
 - **Time and days** — pick the exact time and weekdays; the backup runs when you decide.
