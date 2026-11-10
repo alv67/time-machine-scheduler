@@ -22,10 +22,9 @@ relying on the interval anchored to the last completed backup.
 </div>
 
 Time Machine decides when to back up based on the last completed backup. Time
-Machine Scheduler adds a real schedule: hour, minute and weekdays. It is built
-according to `time-machine-scheduler-app-spec.md`: macOS 14+, SwiftUI, no external
-dependencies, non-sandboxed app, `launchd` daemon installed with `osascript` and
-admin privileges (approach A).
+Machine Scheduler adds a real schedule: hour, minute and weekdays. Built with
+macOS 14+, SwiftUI, no external dependencies, non-sandboxed app, `launchd` daemon
+installed with `osascript` and admin privileges (approach A).
 
 <p align="center">
   <img src="docs/assets/screenshots/en/app.png" width="420" alt="Time Machine Scheduler — schedule, options and status">
@@ -162,7 +161,7 @@ Help and About.
 - Mac asleep with the lid closed: `caffeinate` does not prevent that kind of sleep;
   the job may start late or be unreliable.
 - The UI only needs to be open to use it: the daemon works on its own.
-- Menu bar icon/menu not included (optional section 4.3).
+- Menu bar icon/menu not included.
 - `tmutil listbackups` is not used: no Full Disk Access permission required.
 
 ## Release
@@ -214,7 +213,7 @@ is updated.
 </details>
 
 <details>
-<summary><b>Manual tests (spec §8)</b></summary>
+<summary><b>Manual tests</b></summary>
 
 - [ ] After **Save schedule**, `launchctl print system/local.tmscheduler.nightly`
       shows the job.
