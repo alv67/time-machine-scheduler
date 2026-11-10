@@ -27,9 +27,11 @@ according to `time-machine-scheduler-app-spec.md`: macOS 14+, SwiftUI, no extern
 dependencies, non-sandboxed app, `launchd` daemon installed with `osascript` and
 admin privileges (approach A).
 
-![Time Machine Scheduler — schedule, options and status](docs/assets/screenshots/en/app.png)
-
-*Schedule, options, last and next backup, and a readable log in one window.*
+<p align="center">
+  <img src="docs/assets/screenshots/en/app.png" width="420" alt="Time Machine Scheduler — schedule, options and status">
+  <br>
+  <sub><i>Schedule, options, last and next backup, and a readable log in one window.</i></sub>
+</p>
 
 ## Features
 
