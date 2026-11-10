@@ -7,6 +7,8 @@ Implementata secondo `time-machine-scheduler-app-spec.md`: macOS 14+, SwiftUI,
 nessuna dipendenza esterna, app non sandboxed, daemon `launchd` installato con
 `osascript` e privilegi admin (approccio A).
 
+Autore: **Alessandro Varesi**.
+
 ## Requisiti
 
 - macOS 14 o successivo
@@ -205,6 +207,10 @@ Makefile    build, test, run, dmg, release
 
 L'icona è generata da `Tools/make-icon.swift` (nessun file binario esterno da
 scaricare); `make icon` la rigenera. Il menu dell'app contiene **Informazioni su
-Time Machine Scheduler** (versione, copyright © 2026 alv67 e link al progetto).
+Time Machine Scheduler** (versione, copyright © 2026 Alessandro Varesi e link al progetto).
 Il menu **Aiuto** apre una guida locale in una finestra dedicata; la pagina GitHub
 resta raggiungibile da Aiuto e da About. L'app usa una finestra principale singola.
+
+## Licenza
+
+MIT — vedi [LICENSE](LICENSE). © 2026 Alessandro Varesi.

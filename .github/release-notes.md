@@ -23,3 +23,7 @@ Pianifica i backup di Time Machine a giorni e orari precisi.
 - The daemon is installed from the app with **Save schedule** (admin password).
 - To uninstall: **Restore…** in the app, then delete the app.
 - Verify downloads with `SHA256SUMS.txt`.
+
+---
+
+License: MIT — © 2026 Alessandro Varesi.

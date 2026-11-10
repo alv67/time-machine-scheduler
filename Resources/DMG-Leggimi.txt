@@ -37,3 +37,5 @@ System Settings > Privacy & Security > Open Anyway, or run:
 Uninstall
 - In the app: "Restore..." removes daemon, script and log.
 - Then delete the app from Applications.
+
+License: MIT — © 2026 Alessandro Varesi.
