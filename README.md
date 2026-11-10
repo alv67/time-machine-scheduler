@@ -1,5 +1,13 @@
 # Time Machine Scheduler
 
+![macOS 14+](https://img.shields.io/badge/macOS-14%2B-000000?logo=apple&logoColor=white&style=flat-square)
+![Apple Silicon](https://img.shields.io/badge/Apple%20Silicon-arm64-000000?style=flat-square)
+![Version](https://img.shields.io/badge/version-0.1.0-blue?style=flat-square)
+![License: MIT](https://img.shields.io/badge/license-MIT-green?style=flat-square)
+![SwiftUI](https://img.shields.io/badge/Swift-SwiftUI-F05138?logo=swift&logoColor=white&style=flat-square)
+[![Download DMG](https://img.shields.io/badge/download-DMG-blue?style=flat-square)](https://github.com/alv67/time-machine-scheduler/releases/latest)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-support-FFDD00?logo=buymeacoffee&logoColor=black&style=flat-square)](https://buymeacoffee.com/alv67)
+
 Mini app macOS per pianificare l'avvio dei backup di Time Machine a giorni e orari
 precisi, invece di affidarsi alla frequenza ancorata all'ultimo backup.
 
@@ -210,6 +218,11 @@ scaricare); `make icon` la rigenera. Il menu dell'app contiene **Informazioni su
 Time Machine Scheduler** (versione, copyright © 2026 Alessandro Varesi e link al progetto).
 Il menu **Aiuto** apre una guida locale in una finestra dedicata; la pagina GitHub
 resta raggiungibile da Aiuto e da About. L'app usa una finestra principale singola.
+
+## Supporto
+
+Se l'app ti è utile, puoi [offrirmi un caffè](https://buymeacoffee.com/alv67).
+Il progetto resta gratuito e open source per tutti.
 
 ## Licenza
 

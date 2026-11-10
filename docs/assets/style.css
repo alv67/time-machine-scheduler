@@ -95,7 +95,7 @@ a {
 
 .hero {
   display: grid;
-  grid-template-columns: 1.2fr 0.8fr;
+  grid-template-columns: 1.3fr 0.7fr;
   gap: 48px;
   align-items: center;
   padding: 46px 0 58px;
@@ -139,6 +139,7 @@ h1 {
 .actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 12px;
 }
 
@@ -147,7 +148,7 @@ h1 {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 12px 20px;
+  padding: 12px 16px;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--panel);
