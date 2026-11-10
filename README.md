@@ -1,13 +1,13 @@
 <div align="center">
 
-<img src="docs/assets/icon.png" width="88" alt="Icona di Time Machine Scheduler" />
+<img src="docs/assets/icon.png" width="88" alt="Time Machine Scheduler icon" />
 
 # Time Machine Scheduler
 
-**I backup quando decidi tu.**
+**Backups on your schedule.**
 
-App macOS per pianificare l'avvio dei backup di Time Machine a giorni e orari
-precisi, invece di affidarti alla frequenza ancorata all'ultimo backup.
+A macOS app to run Time Machine backups on specific days and times, instead of
+relying on the interval anchored to the last completed backup.
 
 [![Download DMG](https://img.shields.io/badge/download-DMG-blue?style=flat-square)](https://github.com/alv67/time-machine-scheduler/releases/latest)
 [![Version](https://img.shields.io/badge/version-0.1.0-blue?style=flat-square)](https://github.com/alv67/time-machine-scheduler/releases)
@@ -17,102 +17,102 @@ precisi, invece di affidarti alla frequenza ancorata all'ultimo backup.
 [![Apple Silicon](https://img.shields.io/badge/Apple%20Silicon-arm64-000000?style=flat-square)](https://support.apple.com/en-us/102861)
 [![SwiftUI](https://img.shields.io/badge/Swift-SwiftUI-F05138?logo=swift&logoColor=white&style=flat-square)](https://developer.apple.com/xcode/swiftui/)
 
-[**Download**](https://github.com/alv67/time-machine-scheduler/releases/latest) · [**Releases**](https://github.com/alv67/time-machine-scheduler/releases) · [**Issues**](https://github.com/alv67/time-machine-scheduler/issues) · [**Offrimi un caffè**](https://buymeacoffee.com/alv67)
+[**Download**](https://github.com/alv67/time-machine-scheduler/releases/latest) · [**Releases**](https://github.com/alv67/time-machine-scheduler/releases) · [**Issues**](https://github.com/alv67/time-machine-scheduler/issues) · [**Buy me a coffee**](https://buymeacoffee.com/alv67)
 
 </div>
 
-Time Machine decide quando fare i backup in base all'ultimo completato. Time Machine
-Scheduler aggiunge una pianificazione vera: ora, minuti e giorni della settimana.
-Implementata secondo `time-machine-scheduler-app-spec.md`: macOS 14+, SwiftUI,
-nessuna dipendenza esterna, app non sandboxed, daemon `launchd` installato con
-`osascript` e privilegi admin (approccio A).
+Time Machine decides when to back up based on the last completed backup. Time
+Machine Scheduler adds a real schedule: hour, minute and weekdays. It is built
+according to `time-machine-scheduler-app-spec.md`: macOS 14+, SwiftUI, no external
+dependencies, non-sandboxed app, `launchd` daemon installed with `osascript` and
+admin privileges (approach A).
 
-## Funzionalità
+## Features
 
-- **Orario e giorni** — scegli l'ora esatta e i giorni della settimana; il backup parte quando decidi tu.
-- **La tua destinazione** — legge la destinazione configurata in Time Machine, locale o di rete, e verifica che sia raggiungibile.
-- **Backup senza sorprese** — salta se il Mac è a batteria, impedisce il sonno durante il backup e avvisa a fine operazione.
-- **Stato e log** — fase, percentuale, ultimo backup e log leggibile con rotazione automatica.
-- **Backup ora** — avvia subito un backup fuori pianificazione, senza aspettare l'orario previsto.
-- **Ripristino pulito** — rimuove daemon, script e log e riporta Time Machine alla frequenza scelta.
-- **Italiano e inglese** — interfaccia, guida e pannello About seguono la lingua di sistema.
+- **Time and days** — pick the exact time and weekdays; the backup runs when you decide.
+- **Your destination** — reads the destination configured in Time Machine, local or network, and checks that it is reachable.
+- **No surprises** — skips on battery, prevents sleep during the backup and notifies you when it ends.
+- **Status and logs** — phase, percentage, last backup and a readable log with automatic rotation.
+- **Back up now** — start a backup outside the schedule without waiting for the next run.
+- **Clean restore** — removes daemon, script and logs and puts Time Machine back on the frequency you choose.
+- **Italian and English** — UI, help and About panel follow the system language.
 
-## Requisiti
+## Requirements
 
-- macOS 14 o successivo
-- Mac con Apple Silicon (build arm64)
-- Una destinazione Time Machine configurata
-- Password di amministratore per installare il daemon
-- Command Line Tools per compilare (`xcode-select --install`); nessun progetto Xcode richiesto
+- macOS 14 or later
+- Apple Silicon Mac (arm64 build)
+- A configured Time Machine destination
+- Administrator password to install the daemon
+- Command Line Tools to build (`xcode-select --install`); no Xcode project required
 
-## Installazione
+## Install
 
-1. Scarica il DMG e aprilo.
-2. Trascina **TimeMachineScheduler.app** nella cartella Applications.
-3. Apri l'app e premi **Salva pianificazione**: installa il daemon e richiede la password di amministratore.
+1. Download the DMG and open it.
+2. Drag **TimeMachineScheduler.app** into Applications.
+3. Open the app and click **Save schedule**: it installs the daemon and asks for the administrator password.
 
 ### Gatekeeper
 
-L'app è firmata ad-hoc, non con un Developer ID e non è notarizzata. Su macOS
-recente il doppio clic sul DMG può mostrare «Installazione non riuscita» perché
-l'installazione automatica richiede una firma verificabile.
+The app is ad-hoc signed, not with a Developer ID, and not notarized. On recent
+macOS, double-clicking the DMG may show "Installation failed" because automatic
+installation requires a verifiable signature.
 
-Se macOS blocca l'app, usa **Impostazioni di Sistema → Privacy e Sicurezza → Apri
-comunque** oppure togli la quarantena:
+If macOS blocks the app, use **System Settings → Privacy & Security → Open
+Anyway**, or remove the quarantine flag:
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/TimeMachineScheduler.app
 ```
 
-Installazione locale senza Gatekeeper:
+Local install without Gatekeeper:
 
 ```bash
 make install
-# oppure in una cartella utente:
+# or into a user folder:
 make install PREFIX=~/Applications
 ```
 
-## Uso
+## Usage
 
-1. Imposta ora, giorni e opzioni.
-2. **Salva pianificazione**: chiede la password admin e installa/aggiorna il daemon.
-3. Se il banner segnala una frequenza automatica di Time Machine, usa
-   **Apri Impostazioni Time Machine** e scegli «Manualmente» per evitare backup doppi.
-4. **Backup ora** avvia un backup fuori pianificazione.
-5. **Ripristina…** rimuove daemon, script e log e riporta Time Machine alla
-   frequenza scelta (Manualmente, ogni ora, ogni giorno, ogni settimana).
+1. Set time, days and options.
+2. **Save schedule**: asks for the admin password and installs/updates the daemon.
+3. If the banner reports an automatic Time Machine frequency, use **Open Time
+   Machine Settings** and choose "Manually" to avoid duplicate backups.
+4. **Back up now** starts a backup outside the schedule.
+5. **Restore…** removes daemon, script and logs and puts Time Machine back on the
+   frequency you choose (Manually, hourly, daily, weekly).
 
-La destinazione non va inserita a mano: viene letta da Time Machine
-(`tmutil destinationinfo`) e funziona con qualsiasi destinazione, locale o di rete.
-Con la verifica di raggiungibilità attiva, il daemon controlla l'host della
-destinazione di rete (anche i nomi Bonjour `*.local`) prima di avviare il backup.
+The destination is not entered by hand: it is read from Time Machine
+(`tmutil destinationinfo`) and works with any destination, local or network. With
+reachability checks enabled, the daemon pings the network destination host (including
+Bonjour names such as `*.local`) before starting the backup.
 
-## Build da sorgente
+## Build from source
 
 ```bash
-make test     # verifica la logica di pianificazione e la generazione del plist
-make app      # crea build/TimeMachineScheduler.app
-make run      # apre l'app
-make dmg      # crea build/TimeMachineScheduler-0.1.0.dmg
-make release  # crea DMG, ZIP e SHA256SUMS.txt
-make install  # copia in /Applications e toglie la quarantena
+make test     # checks scheduling logic and plist generation
+make app      # builds build/TimeMachineScheduler.app
+make run      # opens the app
+make dmg      # builds build/TimeMachineScheduler-0.1.0.dmg
+make release  # builds DMG, ZIP and SHA256SUMS.txt
+make install  # copies to /Applications and removes the quarantine flag
 ```
 
-Il build predefinito è **arm64**. Per un binario universale (Intel su macOS 14–26,
-non testato su hardware Intel):
+The default build is **arm64**. For a universal binary (Intel on macOS 14–26, not
+tested on Intel hardware):
 
 ```bash
 make release ARCHS="arm64 x86_64"
 ```
 
-Per firmare con un Developer ID:
+To sign with a Developer ID:
 
 ```bash
-make release SIGN_ID="Developer ID Application: Nome (TEAMID)"
+make release SIGN_ID="Developer ID Application: Name (TEAMID)"
 ```
 
-Se dopo una modifica dell'icona il Dock mostra ancora quella vecchia, macOS sta
-usando la cache di LaunchServices:
+If the Dock still shows the old icon after changing it, macOS is using the
+LaunchServices cache:
 
 ```bash
 make refresh-icon
@@ -120,119 +120,118 @@ make refresh-icon
 
 ## Stack
 
-| Componente | Tecnologia |
-|------------|------------|
+| Layer | Technology |
+|-------|------------|
 | App | SwiftUI, macOS 14+, arm64 |
-| Daemon | `launchd` + script shell, installato da `osascript` con privilegi admin |
-| Build | `swiftc` + `Makefile`, nessun progetto Xcode |
-| Test | Swift, logica di pianificazione e generazione del plist |
-| Distribuzione | DMG, ZIP, `SHA256SUMS.txt`, GitHub Actions |
+| Daemon | `launchd` + shell script, installed by `osascript` with admin privileges |
+| Build | `swiftc` + `Makefile`, no Xcode project |
+| Tests | Swift, scheduling logic and plist generation |
+| Distribution | DMG, ZIP, `SHA256SUMS.txt`, GitHub Actions |
 
-## Struttura
+## Project layout
 
 ```
-App/        UI SwiftUI, modello, controller tmutil, installer
-Daemon/     script eseguito dal LaunchDaemon
-Resources/  icona, localizzazioni it/en e Leggimi per il DMG
-docs/       pagina web del progetto (IT/EN) per GitHub Pages
-Tools/      generatore dell'icona (Core Graphics)
-Tests/      test della logica pura (pianificazione + plist)
-.github/    workflow di release, Pages e triage
-Info.plist  metadati del bundle
+App/        SwiftUI UI, model, tmutil controller, installer
+Daemon/     script run by the LaunchDaemon
+Resources/  icon, it/en localizations and DMG readme
+docs/       project website (IT/EN) for GitHub Pages
+Tools/      icon generator (Core Graphics)
+Tests/      tests for pure logic (schedule + plist)
+.github/    release, Pages and triage workflows
+Info.plist  bundle metadata
 Makefile    build, test, run, dmg, release
 ```
 
-L'icona è generata da `Tools/make-icon.swift` (nessun file binario esterno da
-scaricare); `make icon` la rigenera. Il menu dell'app contiene **Informazioni su
-Time Machine Scheduler** (versione, copyright © 2026 Alessandro Varesi e link al
-progetto). Il menu **Aiuto** apre una guida locale in una finestra dedicata; la
-pagina GitHub resta raggiungibile da Aiuto e da About.
+The icon is generated by `Tools/make-icon.swift` (no external binary to download);
+`make icon` regenerates it. The app menu includes **About Time Machine Scheduler**
+(version, copyright © 2026 Alessandro Varesi and project link). The **Help** menu
+opens a local guide in a dedicated window; the GitHub page is reachable from both
+Help and About.
 
-## Limiti noti
+## Known limitations
 
-- Mac spento: nessuna schedulazione può accenderlo (Apple Silicon non supporta
-  `poweron`). Il backup avverrà al successivo avvio.
-- Build solo arm64: i Mac Intel non sono supportati in questa release.
-- Mac in sonno con coperchio chiuso: `caffeinate` non impedisce quel tipo di sonno;
-  il job può partire in ritardo o non essere affidabile.
-- La UI deve restare aperta solo per usarla: il daemon lavora in autonomia.
-- Icona/menu nella barra dei menu non inclusa (sezione 4.3 facoltativa).
-- `tmutil listbackups` non viene usato: nessun permesso di Accesso completo al disco
-  richiesto.
+- Mac powered off: no schedule can wake it (Apple Silicon does not support
+  `poweron`). The backup runs on the next boot.
+- arm64 only: Intel Macs are not supported in this release.
+- Mac asleep with the lid closed: `caffeinate` does not prevent that kind of sleep;
+  the job may start late or be unreliable.
+- The UI only needs to be open to use it: the daemon works on its own.
+- Menu bar icon/menu not included (optional section 4.3).
+- `tmutil listbackups` is not used: no Full Disk Access permission required.
 
 ## Release
 
-`make release` produce il DMG (app, collegamento Applications e `Leggimi.txt`
-IT/EN), lo ZIP e `SHA256SUMS.txt`. La release pubblica si crea con un tag:
+`make release` produces the DMG (app, Applications link and IT/EN `Leggimi.txt`),
+the ZIP and `SHA256SUMS.txt`. A public release is created with a tag:
 
 ```bash
 git tag v0.1.0
 git push origin v0.1.0
 ```
 
-Il workflow `.github/workflows/release.yml` esegue i test, crea gli artefatti e
-pubblica la release su GitHub. Il tag deve coincidere con
-`CFBundleShortVersionString` in `Info.plist`.
+The `.github/workflows/release.yml` workflow runs the tests, builds the artifacts
+and publishes the GitHub release. The tag must match `CFBundleShortVersionString`
+in `Info.plist`.
 
-Senza notarizzazione la release resta “non verificata” da Gatekeeper: il DMG
-contiene le istruzioni, ma gli utenti devono autorizzare l'app. Un eventuale tap
-Homebrew può essere aggiunto dopo, puntando al DMG della release.
+Without notarization the release stays "unverified" by Gatekeeper: the DMG
+includes instructions, but users must approve the app. A Homebrew tap can be added
+later, pointing at the release DMG.
 
 <details>
-<summary><b>Flusso di release e sito web</b></summary>
+<summary><b>Release flow and website</b></summary>
 
-Flusso: sviluppo su `develop`, preparazione su `release/0.1.0`, pull request verso
-`main` quando la release è pronta, merge su `main` → pubblicazione della pagina
-GitHub Pages, tag `v0.1.0` → release GitHub.
+Flow: development on `develop`, preparation on `release/0.1.0`, pull request to
+`main` when the release is ready, merge to `main` → GitHub Pages deployment, tag
+`v0.1.0` → GitHub release.
 
-La pagina del progetto è in `docs/` (italiano in `docs/index.html`, inglese in
-`docs/en/index.html`) e viene pubblicata dal workflow
-`.github/workflows/pages.yml` quando si aggiorna `main`.
+The project page lives in `docs/` (Italian in `docs/index.html`, English in
+`docs/en/index.html`) and is published by `.github/workflows/pages.yml` when `main`
+is updated.
 
-- URL previsto: https://alv67.github.io/time-machine-scheduler/
-- GitHub Pages su un repository privato richiede GitHub Pro/Team/Enterprise. Con
-  GitHub Free il repository deve essere pubblico.
+- Expected URL: https://alv67.github.io/time-machine-scheduler/
+- GitHub Pages on a private repository requires GitHub Pro/Team/Enterprise. On
+  GitHub Free the repository must be public.
 
 </details>
 
 <details>
-<summary><b>Percorsi di sistema toccati</b></summary>
+<summary><b>System paths touched</b></summary>
 
 - `/Library/Application Support/TMScheduler/config.json`
 - `/Library/Application Support/TMScheduler/last-run.json`
 - `/Library/Application Support/TMScheduler/tmscheduler.log` (+ `.1`, `.2`, `.3`)
 - `/Library/LaunchDaemons/local.tmscheduler.nightly.plist`
 - `/usr/local/bin/tmscheduler-run`
-- preferenze `AutoBackup` / `AutoBackupInterval` di Time Machine (solo tramite
-  "Apri Impostazioni Time Machine" e "Ripristina…")
+- Time Machine `AutoBackup` / `AutoBackupInterval` preferences (only through
+  "Open Time Machine Settings" and "Restore…")
 
 </details>
 
 <details>
-<summary><b>Test manuali (specifica §8)</b></summary>
+<summary><b>Manual tests (spec §8)</b></summary>
 
-- [ ] Dopo **Salva pianificazione**, `launchctl print system/local.tmscheduler.nightly`
-      mostra il job.
-- [ ] `sudo launchctl kickstart -k system/local.tmscheduler.nightly` avvia il backup
-      e il log registra inizio/fine.
-- [ ] Con la destinazione Time Machine spenta o irraggiungibile, il daemon scrive
-      `skip: destination … unreachable` e non avvia Time Machine.
-- [ ] Con un backup già in corso, il daemon scrive `skip: backup already running`.
-- [ ] Cambiando ora/giorni dall'app, il plist viene rigenerato e il job ricaricato.
-- [ ] Con l'interruttore OFF, il job non parte.
-- [ ] **Ripristina…** rimuove plist e script e riporta `AutoBackup`/`AutoBackupInterval`
-      ai valori scelti.
-- [ ] Mac in sonno con coperchio aperto alle 02:00: comportamento coerente con i limiti
-      sopra.
-- [ ] Dopo l'uso, `tmutil listbackups` e i backup manuali da UI di sistema funzionano.
+- [ ] After **Save schedule**, `launchctl print system/local.tmscheduler.nightly`
+      shows the job.
+- [ ] `sudo launchctl kickstart -k system/local.tmscheduler.nightly` starts the
+      backup and the log records start/end.
+- [ ] With the Time Machine destination off or unreachable, the daemon writes
+      `skip: destination … unreachable` and does not start Time Machine.
+- [ ] With a backup already running, the daemon writes `skip: backup already running`.
+- [ ] Changing time/days in the app regenerates the plist and reloads the job.
+- [ ] With the toggle OFF, the job does not run.
+- [ ] **Restore…** removes plist and script and restores
+      `AutoBackup`/`AutoBackupInterval` to the selected values.
+- [ ] Mac asleep with the lid open at 02:00: behavior consistent with the limits
+      above.
+- [ ] After use, `tmutil listbackups` and manual backups from the system UI work.
 
 </details>
 
-## Supporto
+## Support
 
-Se l'app ti è utile, puoi [offrirmi un caffè](https://buymeacoffee.com/alv67).
-Il progetto resta gratuito e open source per tutti.
+If the app is useful to you, you can [buy me a coffee](https://buymeacoffee.com/alv67).
+The project stays free and open source for everyone.
 
-## Licenza
+## License
 
-MIT — vedi [LICENSE](LICENSE). © 2026 Alessandro Varesi.
+MIT — see [LICENSE](LICENSE). © 2026 Alessandro Varesi.
