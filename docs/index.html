@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Time Machine Scheduler — backup di Time Machine a orari precisi</title>
+  <meta name="description" content="App macOS per pianificare i backup di Time Machine a giorni e orari precisi. Apple Silicon, macOS 14+.">
+  <meta name="theme-color" content="#1fa79b">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Time Machine Scheduler">
+  <meta property="og:description" content="Pianifica i backup di Time Machine a giorni e orari precisi.">
+  <meta property="og:image" content="assets/icon.png">
+  <link rel="icon" href="assets/icon.png">
+  <link rel="alternate" hreflang="en" href="en/index.html">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div class="container">
+    <header class="site-header">
+      <a class="brand" href="index.html">
+        <img src="assets/icon.png" alt="">
+        Time Machine Scheduler
+      </a>
+      <nav class="nav" aria-label="Navigazione">
+        <a href="en/index.html" lang="en" hreflang="en">English</a>
+        <a href="https://github.com/alv67/time-machine-scheduler">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div>
+          <p class="eyebrow">macOS · Apple Silicon</p>
+          <h1>Time Machine Scheduler</h1>
+          <p class="lead">
+            Pianifica i backup di Time Machine a giorni e orari precisi.
+            Decidi tu quando parte, non l'ultimo backup completato.
+          </p>
+          <div class="actions">
+            <a class="button primary" href="https://github.com/alv67/time-machine-scheduler/releases/latest">
+              Scarica l'ultima release
+            </a>
+            <a class="button" href="https://github.com/alv67/time-machine-scheduler">
+              Codice su GitHub
+            </a>
+          </div>
+          <p class="meta">Versione 0.1.0 · macOS 14+ · Apple Silicon</p>
+        </div>
+        <div class="hero-visual">
+          <img class="app-icon" src="assets/icon.png" alt="Icona di Time Machine Scheduler" width="148" height="148">
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Pensata per chi vuole decidere quando parte Time Machine</h2>
+        <p>
+          Time Machine parte in base all'ultimo backup completato. Time Machine Scheduler
+          aggiunge una pianificazione vera: ora, minuti e giorni della settimana.
+        </p>
+        <div class="features">
+          <article class="card">
+            <h3>Orario e giorni</h3>
+            <p>Scegli l'ora esatta e i giorni della settimana. Il backup parte quando decidi tu.</p>
+          </article>
+          <article class="card">
+            <h3>La tua destinazione</h3>
+            <p>Legge la destinazione configurata in Time Machine, locale o di rete, e verifica che sia raggiungibile.</p>
+          </article>
+          <article class="card">
+            <h3>Backup senza sorprese</h3>
+            <p>Salta se il Mac è a batteria, impedisce il sonno durante il backup e avvisa a fine operazione.</p>
+          </article>
+          <article class="card">
+            <h3>Stato e log</h3>
+            <p>Fase, percentuale, ultimo backup e log leggibile con rotazione automatica.</p>
+          </article>
+          <article class="card">
+            <h3>Backup ora</h3>
+            <p>Avvia subito un backup fuori pianificazione, senza aspettare l'orario previsto.</p>
+          </article>
+          <article class="card">
+            <h3>Ripristino pulito</h3>
+            <p>Rimuove daemon, script e log e riporta Time Machine alla frequenza scelta.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" id="installazione">
+        <h2>Installazione</h2>
+        <ol class="steps">
+          <li>Scarica il DMG e aprilo.</li>
+          <li>Trascina <strong>TimeMachineScheduler.app</strong> nella cartella Applications.</li>
+          <li>Apri l'app e premi <strong>Salva pianificazione</strong>: installa il daemon e richiede la password di amministratore.</li>
+        </ol>
+        <div class="notice">
+          <strong>App non notarizzata.</strong>
+          Se macOS blocca il primo avvio, usa
+          <strong>Impostazioni di Sistema → Privacy e Sicurezza → Apri comunque</strong>
+          oppure esegui:
+          <pre><code>xattr -dr com.apple.quarantine /Applications/TimeMachineScheduler.app</code></pre>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Requisiti e limiti</h2>
+        <div class="grid-2">
+          <div>
+            <h3>Serve</h3>
+            <ul>
+              <li>macOS 14 o successivo</li>
+              <li>Mac con Apple Silicon</li>
+              <li>Una destinazione Time Machine configurata</li>
+              <li>Password di amministratore per installare il daemon</li>
+            </ul>
+          </div>
+          <div>
+            <h3>Limiti noti</h3>
+            <ul>
+              <li>Un Mac spento non può essere acceso dalla pianificazione</li>
+              <li><code>caffeinate</code> non impedisce il sonno con il coperchio chiuso</li>
+              <li>La release attuale non è firmata né notarizzata</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Codice e sviluppo</h2>
+        <p>
+          Il progetto è open source su GitHub. Si compila con Swift e i Command Line Tools,
+          senza progetto Xcode:
+        </p>
+        <pre><code>make test
+make app
+make install</code></pre>
+        <p class="meta">
+          <a href="https://github.com/alv67/time-machine-scheduler#readme">Leggi il README</a>
+          · <a href="https://github.com/alv67/time-machine-scheduler/issues">Segnala un problema</a>
+        </p>
+      </section>
+    </main>
+
+    <footer>
+      <span>© 2026 alv67</span>
+      <span>
+        <a href="https://github.com/alv67/time-machine-scheduler">GitHub</a>
+        · <a href="en/index.html" lang="en" hreflang="en">English</a>
+      </span>
+    </footer>
+  </div>
+</body>
+</html>

@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Time Machine Scheduler — schedule Time Machine backups</title>
+  <meta name="description" content="A macOS app to schedule Time Machine backups on specific days and times. Apple Silicon, macOS 14+.">
+  <meta name="theme-color" content="#1fa79b">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Time Machine Scheduler">
+  <meta property="og:description" content="Schedule Time Machine backups on specific days and times.">
+  <meta property="og:image" content="../assets/icon.png">
+  <link rel="icon" href="../assets/icon.png">
+  <link rel="alternate" hreflang="it" href="../index.html">
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <div class="container">
+    <header class="site-header">
+      <a class="brand" href="index.html">
+        <img src="../assets/icon.png" alt="">
+        Time Machine Scheduler
+      </a>
+      <nav class="nav" aria-label="Navigation">
+        <a href="../index.html" lang="it" hreflang="it">Italiano</a>
+        <a href="https://github.com/alv67/time-machine-scheduler">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div>
+          <p class="eyebrow">macOS · Apple Silicon</p>
+          <h1>Time Machine Scheduler</h1>
+          <p class="lead">
+            Schedule Time Machine backups on specific days and times.
+            You decide when it runs, not the last completed backup.
+          </p>
+          <div class="actions">
+            <a class="button primary" href="https://github.com/alv67/time-machine-scheduler/releases/latest">
+              Download the latest release
+            </a>
+            <a class="button" href="https://github.com/alv67/time-machine-scheduler">
+              Source on GitHub
+            </a>
+          </div>
+          <p class="meta">Version 0.1.0 · macOS 14+ · Apple Silicon</p>
+        </div>
+        <div class="hero-visual">
+          <img class="app-icon" src="../assets/icon.png" alt="Time Machine Scheduler icon" width="148" height="148">
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Built for people who want to decide when Time Machine runs</h2>
+        <p>
+          Time Machine schedules around the last completed backup. Time Machine Scheduler
+          adds a real schedule: hour, minute and weekdays.
+        </p>
+        <div class="features">
+          <article class="card">
+            <h3>Time and days</h3>
+            <p>Choose the exact start time and the weekdays. The backup starts when you decide.</p>
+          </article>
+          <article class="card">
+            <h3>Your destination</h3>
+            <p>Reads the destination configured in Time Machine, local or network, and checks that it is reachable.</p>
+          </article>
+          <article class="card">
+            <h3>No surprises</h3>
+            <p>Skips on battery, prevents sleep during the backup and notifies you when it ends.</p>
+          </article>
+          <article class="card">
+            <h3>Status and log</h3>
+            <p>Phase, percentage, last backup and a readable log with automatic rotation.</p>
+          </article>
+          <article class="card">
+            <h3>Back up now</h3>
+            <p>Start a backup immediately, outside the schedule.</p>
+          </article>
+          <article class="card">
+            <h3>Clean restore</h3>
+            <p>Removes the daemon, script and log, and returns Time Machine to the selected frequency.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" id="install">
+        <h2>Install</h2>
+        <ol class="steps">
+          <li>Download the DMG and open it.</li>
+          <li>Drag <strong>TimeMachineScheduler.app</strong> into the Applications folder.</li>
+          <li>Open the app and click <strong>Save schedule</strong>: it installs the daemon and asks for the administrator password.</li>
+        </ol>
+        <div class="notice">
+          <strong>The app is not notarized.</strong>
+          If macOS blocks the first launch, use
+          <strong>System Settings → Privacy &amp; Security → Open Anyway</strong>
+          or run:
+          <pre><code>xattr -dr com.apple.quarantine /Applications/TimeMachineScheduler.app</code></pre>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Requirements and limitations</h2>
+        <div class="grid-2">
+          <div>
+            <h3>Requirements</h3>
+            <ul>
+              <li>macOS 14 or later</li>
+              <li>Apple Silicon Mac</li>
+              <li>A configured Time Machine destination</li>
+              <li>Administrator password to install the daemon</li>
+            </ul>
+          </div>
+          <div>
+            <h3>Known limitations</h3>
+            <ul>
+              <li>A powered-off Mac cannot be woken by the schedule</li>
+              <li><code>caffeinate</code> does not prevent sleep with the lid closed</li>
+              <li>The current release is not signed or notarized</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Source and development</h2>
+        <p>
+          The project is open source on GitHub. It builds with Swift and the Command Line
+          Tools, without an Xcode project:
+        </p>
+        <pre><code>make test
+make app
+make install</code></pre>
+        <p class="meta">
+          <a href="https://github.com/alv67/time-machine-scheduler#readme">Read the README</a>
+          · <a href="https://github.com/alv67/time-machine-scheduler/issues">Report an issue</a>
+        </p>
+      </section>
+    </main>
+
+    <footer>
+      <span>© 2026 alv67</span>
+      <span>
+        <a href="https://github.com/alv67/time-machine-scheduler">GitHub</a>
+        · <a href="../index.html" lang="it" hreflang="it">Italiano</a>
+      </span>
+    </footer>
+  </div>
+</body>
+</html>

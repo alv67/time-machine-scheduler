@@ -10,6 +10,7 @@ nessuna dipendenza esterna, app non sandboxed, daemon `launchd` installato con
 ## Requisiti
 
 - macOS 14 o successivo
+- Apple Silicon (build arm64)
 - Command Line Tools (`xcode-select --install`)
 - Nessun progetto Xcode richiesto: la build usa `swiftc` e un `Makefile`
 
@@ -19,7 +20,8 @@ nessuna dipendenza esterna, app non sandboxed, daemon `launchd` installato con
 make test   # verifica la logica di pianificazione e la generazione del plist
 make app    # crea build/TimeMachineScheduler.app
 make run    # apre l'app
-make dmg    # crea build/TimeMachineScheduler-1.0.dmg
+make dmg    # crea build/TimeMachineScheduler-0.1.0.dmg
+make release  # crea DMG, ZIP e SHA256SUMS.txt
 make install  # copia in /Applications e toglie la quarantena
 ```
 
@@ -50,12 +52,69 @@ make install PREFIX=~/Applications
 Se il DMG è stato scaricato, togli la quarantena prima di aprirlo:
 
 ```bash
-xattr -d com.apple.quarantine ~/Downloads/TimeMachineScheduler-1.0.dmg
+xattr -d com.apple.quarantine ~/Downloads/TimeMachineScheduler-0.1.0.dmg
 ```
 
 Per un DMG apribile con doppio clic su altri Mac serve una firma **Developer ID
 Application** e la notarizzazione Apple; con il solo certificato Apple Development
 Gatekeeper rifiuta comunque l'app.
+
+## Release
+
+`make release` produce:
+
+- `build/TimeMachineScheduler-0.1.0.dmg` — app, collegamento Applications e
+  `Leggimi.txt` con le istruzioni IT/EN;
+- `build/TimeMachineScheduler-0.1.0.zip`;
+- `build/SHA256SUMS.txt`.
+
+Il build predefinito è **arm64** (Apple Silicon). Per un binario universale
+(Intel su macOS 14–26, non testato su hardware Intel):
+
+```bash
+make release ARCHS="arm64 x86_64"
+```
+
+Per firmare con un Developer ID:
+
+```bash
+make release SIGN_ID="Developer ID Application: Nome (TEAMID)"
+```
+
+La release pubblica si crea con un tag:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+Il workflow `.github/workflows/release.yml` esegue i test, crea gli artefatti e
+pubblica la release su GitHub. Il tag deve coincidere con
+`CFBundleShortVersionString` in `Info.plist`.
+
+Senza notarizzazione la release resta “non verificata” da Gatekeeper: il DMG
+contiene le istruzioni, ma gli utenti devono autorizzare l'app. Un eventuale tap
+Homebrew può essere aggiunto dopo, puntando al DMG della release.
+
+## Sito web
+
+La pagina del progetto è in `docs/` (italiano in `docs/index.html`, inglese in
+`docs/en/index.html`) e viene pubblicata su GitHub Pages dal workflow
+`.github/workflows/pages.yml` quando si aggiorna `main`.
+
+- URL previsto: https://alv67.github.io/time-machine-scheduler/
+- Nota: GitHub Pages su un repository **privato** richiede un piano che lo
+  consenta (GitHub Pro/Team/Enterprise). Con GitHub Free il repository deve essere
+  pubblico. Il workflow è già pronto.
+
+## Flusso di release
+
+1. sviluppo su `develop`;
+2. preparazione su `release/0.1.0`;
+3. pull request verso `main` quando la release è pronta;
+4. merge su `main` → pubblicazione della pagina GitHub Pages;
+5. tag `v0.1.0` → il workflow `.github/workflows/release.yml` crea DMG, ZIP,
+   checksum e pubblica la release GitHub.
 
 L'app può essere trascinata in `/Applications`. Per rimuoverla basta cancellarla:
 la configurazione di sistema si toglie dal pulsante **Ripristina…**.
@@ -105,6 +164,7 @@ Le modifiche al daemon, compresi i messaggi di log, si applicano premendo di nuo
 
 - Mac spento: nessuna schedulazione può accenderlo (Apple Silicon non supporta
   `poweron`). Il backup avverrà al successivo avvio.
+- Build solo arm64: i Mac Intel non sono supportati in questa release.
 - Mac in sonno con coperchio chiuso: `caffeinate` non impedisce quel tipo di sonno;
   il job può partire in ritardo o non essere affidabile.
 - La UI deve restare aperta solo per usarla: il daemon lavora in autonomia.
@@ -134,11 +194,13 @@ Le modifiche al daemon, compresi i messaggi di log, si applicano premendo di nuo
 ```
 App/        UI SwiftUI, modello, controller tmutil, installer
 Daemon/     script eseguito dal LaunchDaemon
-Resources/  icona sorgente e localizzazioni it/en
+Resources/  icona, localizzazioni it/en e Leggimi per il DMG
+docs/       pagina web del progetto (IT/EN) per GitHub Pages
 Tools/      generatore dell'icona (Core Graphics)
 Tests/      test della logica pura (pianificazione + plist)
+.github/    workflow di release, Pages e note
 Info.plist  metadati del bundle
-Makefile    build, test, run, icon
+Makefile    build, test, run, dmg, release
 ```
 
 L'icona è generata da `Tools/make-icon.swift` (nessun file binario esterno da

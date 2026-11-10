@@ -1,0 +1,39 @@
+Time Machine Scheduler
+======================
+
+Italiano
+--------
+Requisiti: macOS 14 o successivo (Apple Silicon).
+
+Installazione
+1. Trascina TimeMachineScheduler.app nella cartella Applications.
+2. Apri l'app e premi "Salva pianificazione": installa il daemon e richiede
+   la password di amministratore.
+3. Se il banner lo segnala, imposta Time Machine su "Manualmente".
+
+L'app non è notarizzata: se macOS la blocca, usa
+Impostazioni di Sistema > Privacy e Sicurezza > Apri comunque, oppure da
+Terminale:
+  xattr -dr com.apple.quarantine /Applications/TimeMachineScheduler.app
+
+Disinstallazione
+- Nell'app: "Ripristina..." per rimuovere daemon, script e log.
+- Poi elimina l'app da Applications.
+
+English
+-------
+Requirements: macOS 14 or later (Apple Silicon).
+
+Install
+1. Drag TimeMachineScheduler.app into Applications.
+2. Open the app and click "Save schedule": it installs the daemon and asks for
+   the administrator password.
+3. If the banner suggests it, set Time Machine to "Manually".
+
+The app is not notarized: if macOS blocks it, use
+System Settings > Privacy & Security > Open Anyway, or run:
+  xattr -dr com.apple.quarantine /Applications/TimeMachineScheduler.app
+
+Uninstall
+- In the app: "Restore..." removes daemon, script and log.
+- Then delete the app from Applications.

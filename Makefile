@@ -1,17 +1,29 @@
+# Build e release.
+# Per una release firmata con Developer ID:
+#   make release SIGN_ID="Developer ID Application: Nome (TEAMID)"
+# La notarizzazione resta un passaggio separato.
+# Build predefinita: arm64 (Apple Silicon). Per un universale (Intel su macOS 14–26):
+#   make release ARCHS="arm64 x86_64"
+
 APP_NAME := TimeMachineScheduler
 BUILD := build
 APP := $(BUILD)/$(APP_NAME).app
 VERSION := $(shell /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Info.plist)
 DMG := $(BUILD)/$(APP_NAME)-$(VERSION).dmg
+ZIP := $(BUILD)/$(APP_NAME)-$(VERSION).zip
+CHECKSUMS := $(BUILD)/SHA256SUMS.txt
 DMG_STAGE := $(BUILD)/dmg
 ICON_PNG := Resources/AppIcon-1024.png
 ICON_ICNS := $(BUILD)/AppIcon.icns
 ICONSET := $(BUILD)/AppIcon.iconset
 SDK := $(shell xcrun --show-sdk-path)
-ARCH := $(shell uname -m)
-SWIFTFLAGS := -O -parse-as-library -target $(ARCH)-apple-macos14.0 -sdk $(SDK)
+MACOS_MIN := 14.0
+ARCHS ?= arm64
+HOST_ARCH := $(shell uname -m)
+SWIFTFLAGS := -O -parse-as-library -sdk $(SDK)
+SIGN_ID ?= -
 
-.PHONY: app test run clean icon refresh-icon dmg install
+.PHONY: app test run clean icon refresh-icon dmg zip release checksums install
 
 app: $(APP)
 
@@ -37,30 +49,45 @@ $(ICON_ICNS): $(ICON_PNG)
 
 $(APP): App/*.swift Info.plist Daemon/tmscheduler-run.sh $(ICON_ICNS) $(wildcard Resources/*.lproj/*.strings)
 	mkdir -p $(APP)/Contents/MacOS $(APP)/Contents/Resources
-	swiftc $(SWIFTFLAGS) App/*.swift -o $(APP)/Contents/MacOS/$(APP_NAME)
+	set -e; for arch in $(ARCHS); do \
+		mkdir -p $(BUILD)/$$arch; \
+		swiftc $(SWIFTFLAGS) -target $$arch-apple-macos$(MACOS_MIN) App/*.swift -o $(BUILD)/$$arch/$(APP_NAME); \
+	done
+	lipo -create $(foreach arch,$(ARCHS),$(BUILD)/$(arch)/$(APP_NAME)) -output $(APP)/Contents/MacOS/$(APP_NAME)
 	cp Info.plist $(APP)/Contents/Info.plist
 	cp Daemon/tmscheduler-run.sh $(APP)/Contents/Resources/tmscheduler-run.sh
 	cp $(ICON_ICNS) $(APP)/Contents/Resources/AppIcon.icns
 	for lproj in Resources/*.lproj; do cp -R "$$lproj" $(APP)/Contents/Resources/; done
-	codesign --force --deep --sign - $(APP)
+	codesign --force --deep --sign "$(SIGN_ID)" $(APP)
 
 test:
 	mkdir -p $(BUILD)
-	swiftc -parse-as-library -target $(ARCH)-apple-macos14.0 -sdk $(SDK) \
+	swiftc -parse-as-library -target $(HOST_ARCH)-apple-macos$(MACOS_MIN) -sdk $(SDK) \
 		App/Schedule.swift Tests/ScheduleTests.swift -o $(BUILD)/schedule-tests
 	./$(BUILD)/schedule-tests
 
 run: app
 	open $(APP)
 
-dmg: app
+dmg: app Resources/DMG-Leggimi.txt
 	rm -rf $(DMG_STAGE)
 	mkdir -p $(DMG_STAGE)
 	cp -R $(APP) $(DMG_STAGE)/
 	ln -s /Applications $(DMG_STAGE)/Applications
-	hdiutil create -volname "Time Machine Scheduler" -srcfolder $(DMG_STAGE) -ov -format UDZO $(DMG)
+	cp Resources/DMG-Leggimi.txt $(DMG_STAGE)/Leggimi.txt
+	hdiutil create -volname "$(APP_NAME) $(VERSION)" -srcfolder $(DMG_STAGE) -ov -format UDZO $(DMG)
 	rm -rf $(DMG_STAGE)
 	@echo "DMG pronto: $(DMG)"
+
+zip: app
+	ditto -c -k --keepParent $(APP) $(ZIP)
+	@echo "ZIP pronto: $(ZIP)"
+
+checksums: dmg zip
+	cd $(BUILD) && shasum -a 256 $(notdir $(DMG)) $(notdir $(ZIP)) > $(notdir $(CHECKSUMS))
+	@echo "Checksum pronti: $(CHECKSUMS)"
+
+release: checksums
 
 PREFIX ?= /Applications
 
