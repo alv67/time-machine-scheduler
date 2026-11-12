@@ -38,6 +38,7 @@ installed with `osascript` and admin privileges (approach A).
 - **Locked screen** — the daemon holds a keybag assertion, so a backup that starts while the screen is locked still completes instead of failing with `BACKUP_FAILED_DEVICE_LOCKED`.
 - **Your destination** — reads the destination configured in Time Machine, local or network, and checks that it is reachable.
 - **No surprises** — skips on battery, prevents sleep during the backup and notifies you when it ends.
+- **No idle standby** — optional: the daemon keeps the Mac awake so the scheduled time is not missed, while the display can still sleep.
 - **Status and logs** — phase, percentage, last backup and a readable log with automatic rotation.
 - **Back up now** — start a backup outside the schedule without waiting for the next run.
 - **Clean restore** — removes daemon, script and logs and puts Time Machine back on the frequency you choose.
@@ -161,7 +162,7 @@ Help and About.
 - arm64 only: Intel Macs are not supported in this release.
 - Mac asleep with the lid closed: `caffeinate` does not prevent that kind of sleep;
   the job may start late or be unreliable.
-- `mkba` assertion: it comes from `MobileKeyBag`, a private framework loaded with
+- Keybag assertion: it comes from `MobileKeyBag`, a private framework loaded with
   `dlopen`/`dlsym`. If Apple removes `MKBDeviceLockAssertion` the daemon keeps
   scheduling but locked-screen backups fail again; the log says
   `keybag assertion: missing symbol`.
@@ -172,6 +173,11 @@ Help and About.
   if that trade-off is not acceptable.
 - A backup skipped because the Mac was off or asleep is not caught up later; the
   next one runs at the next scheduled time.
+- "Prevent the Mac from going to sleep" keeps the Mac awake for as long as the
+  service is active: more power and heat, and the battery drains on battery
+  power. The display can still sleep. A Mac with the lid closed and no external
+  display sleeps anyway, and a powered-off Mac cannot be woken by a schedule
+  (Apple Silicon).
 - The UI only needs to be open to use it: the daemon works on its own.
 - Menu bar icon/menu not included.
 - `tmutil listbackups` is not used: no Full Disk Access permission required.

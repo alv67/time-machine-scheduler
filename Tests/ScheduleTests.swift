@@ -66,6 +66,22 @@ struct ScheduleTests {
         config.enabled = false
         assert(!ScheduleLogic.isDue(at: at(0), config: config, lastRun: nil, calendar: calendar))
 
+        // config.json scritto prima di keepAwake: manca la chiave, il resto resta
+        let legacy = """
+        {"enabled":true,"hour":3,"minute":30,"weekdays":[2],"requireDestination":false,
+         "preventSleep":false,"skipOnBattery":true,"notify":false,"version":1}
+        """
+        let decoded = try! JSONDecoder().decode(ScheduleConfig.self, from: Data(legacy.utf8))
+        assert(decoded.keepAwake == false)
+        assert(decoded.hour == 3 && decoded.minute == 30 && decoded.weekdays == [2])
+        assert(decoded.requireDestination == false && decoded.skipOnBattery == true)
+
+        var roundTrip = decoded
+        roundTrip.keepAwake = true
+        let encoded = try! JSONEncoder().encode(roundTrip)
+        let back = try! JSONDecoder().decode(ScheduleConfig.self, from: encoded)
+        assert(back == roundTrip)
+
         print("ScheduleLogic: tutti i test superati")
     }
 }

@@ -1,5 +1,6 @@
 import Darwin
 import Foundation
+import IOKit.pwr_mgt
 
 // Daemon unico: tiene l'assertion sul keybag mentre la macchina è sbloccata e all'orario
 // pianificato lancia `tmscheduler-run` (che fa il backup). Senza assertion Time Machine non
@@ -46,6 +47,36 @@ private enum Keybag {
         var assertion: CFTypeRef?
         guard takeFn(NSDictionary() as CFDictionary, &assertion) == 0 else { return nil }
         return assertion
+    }
+}
+
+/// Stand-by: finché il servizio è attivo e l'opzione è on, il Mac non va in sleep da solo.
+/// Lo schermo può comunque spegnersi.
+private enum Power {
+    private(set) static var held = false
+    private static var id: IOPMAssertionID = 0
+
+    static func preventSleep() {
+        guard !held else { return }
+        let rc = IOPMAssertionCreateWithName(
+            kIOPMAssertionTypePreventUserIdleSystemSleep as CFString,
+            IOPMAssertionLevel(kIOPMAssertionLevelOn),
+            "TimeMachineScheduler" as CFString,
+            &id
+        )
+        held = rc == kIOReturnSuccess
+        if held {
+            log("power: idle sleep prevented")
+        } else {
+            log("power: cannot prevent sleep, rc=\(rc)")
+        }
+    }
+
+    static func allowSleep() {
+        guard held else { return }
+        IOPMAssertionRelease(id)
+        held = false
+        log("power: idle sleep allowed")
     }
 }
 
@@ -99,6 +130,12 @@ while true {
     let now = Date()
     if let fresh = loadConfig() {
         config = fresh
+    }
+
+    if config.keepAwake {
+        Power.preventSleep()
+    } else {
+        Power.allowSleep()
     }
 
     if assertion == nil {

@@ -13,6 +13,7 @@
 "options.requireDestination" = "Start only if the destination is reachable";
 "options.preventSleep" = "Prevent sleep during backup";
 "options.skipOnBattery" = "Skip when the Mac is on battery";
+"options.keepAwake" = "Prevent the Mac from going to sleep";
 "options.notify" = "Notify when backup ends";
 
 "status.lastBackup" = "Last backup";
@@ -98,6 +99,7 @@
 "help.options.2" = "“Prevent sleep” uses caffeinate -i during the backup.";
 "help.options.3" = "“Skip when the Mac is on battery” avoids backups while the Mac is not connected to power.";
 "help.options.4" = "“Notify when backup ends” shows a system notification.";
+"help.options.5" = "“Prevent the Mac from going to sleep” keeps the Mac awake while the service is active (the display can still sleep). Use it when the Mac would otherwise be asleep at the scheduled time; opening the lid or an external display changes nothing, a Mac that is off cannot be woken by any schedule.";
 
 "help.backup.title" = "Backup and log";
 "help.backup.1" = "“Back up now” starts a backup immediately, outside the schedule.";

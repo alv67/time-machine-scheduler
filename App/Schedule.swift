@@ -18,7 +18,28 @@ struct ScheduleConfig: Codable, Equatable {
     var preventSleep = true
     var skipOnBattery = false
     var notify = true
+    /// Impedisce lo stand-by mentre il servizio è attivo: con uno sleep breve il Mac
+    /// sarebbe addormentato all'orario pianificato.
+    var keepAwake = false
     var version = 1
+
+    init() {}
+
+    /// decodeIfPresent: i config.json scritti prima di `keepAwake` devono restare leggibili.
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        let defaults = ScheduleConfig()
+        enabled = try values.decodeIfPresent(Bool.self, forKey: .enabled) ?? defaults.enabled
+        hour = try values.decodeIfPresent(Int.self, forKey: .hour) ?? defaults.hour
+        minute = try values.decodeIfPresent(Int.self, forKey: .minute) ?? defaults.minute
+        weekdays = try values.decodeIfPresent([Int].self, forKey: .weekdays) ?? defaults.weekdays
+        requireDestination = try values.decodeIfPresent(Bool.self, forKey: .requireDestination) ?? defaults.requireDestination
+        preventSleep = try values.decodeIfPresent(Bool.self, forKey: .preventSleep) ?? defaults.preventSleep
+        skipOnBattery = try values.decodeIfPresent(Bool.self, forKey: .skipOnBattery) ?? defaults.skipOnBattery
+        notify = try values.decodeIfPresent(Bool.self, forKey: .notify) ?? defaults.notify
+        keepAwake = try values.decodeIfPresent(Bool.self, forKey: .keepAwake) ?? defaults.keepAwake
+        version = try values.decodeIfPresent(Int.self, forKey: .version) ?? defaults.version
+    }
 }
 
 enum Paths {
