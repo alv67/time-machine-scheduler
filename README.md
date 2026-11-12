@@ -35,6 +35,7 @@ installed with `osascript` and admin privileges (approach A).
 ## Features
 
 - **Time and days** — pick the exact time and weekdays; the backup runs when you decide.
+- **Locked screen** — the daemon holds a keybag assertion, so a backup that starts while the screen is locked still completes instead of failing with `BACKUP_FAILED_DEVICE_LOCKED`.
 - **Your destination** — reads the destination configured in Time Machine, local or network, and checks that it is reachable.
 - **No surprises** — skips on battery, prevents sleep during the backup and notifies you when it ends.
 - **Status and logs** — phase, percentage, last backup and a readable log with automatic rotation.
@@ -128,7 +129,7 @@ make refresh-icon
 | Layer | Technology |
 |-------|------------|
 | App | SwiftUI, macOS 14+, arm64 |
-| Daemon | `launchd` + shell script, installed by `osascript` with admin privileges |
+| Daemon | `launchd` + a Swift binary that holds the keybag assertion and starts the backup; installed by `osascript` with admin privileges |
 | Build | `swiftc` + `Makefile`, no Xcode project |
 | Tests | Swift, scheduling logic and plist generation |
 | Distribution | DMG, ZIP, `SHA256SUMS.txt`, GitHub Actions |
@@ -137,7 +138,7 @@ make refresh-icon
 
 ```
 App/        SwiftUI UI, model, tmutil controller, installer
-Daemon/     script run by the LaunchDaemon
+Daemon/     scheduling daemon (Swift) and the single-backup script it runs
 Resources/  icon, it/en localizations and DMG readme
 docs/       project website (IT/EN) for GitHub Pages
 Tools/      icon generator (Core Graphics)
@@ -160,6 +161,17 @@ Help and About.
 - arm64 only: Intel Macs are not supported in this release.
 - Mac asleep with the lid closed: `caffeinate` does not prevent that kind of sleep;
   the job may start late or be unreliable.
+- `mkba` assertion: it comes from `MobileKeyBag`, a private framework loaded with
+  `dlopen`/`dlsym`. If Apple removes `MKBDeviceLockAssertion` the daemon keeps
+  scheduling but locked-screen backups fail again; the log says
+  `keybag assertion: missing symbol`.
+- The assertion can only be taken while the Mac is unlocked, so after a reboot it
+  is taken at the first login. Holding it keeps file-protection keys available
+  while the screen is locked: with FileVault enabled this widens the window in
+  which a running (root) attacker can read protected files. Turn the service off
+  if that trade-off is not acceptable.
+- A backup skipped because the Mac was off or asleep is not caught up later; the
+  next one runs at the next scheduled time.
 - The UI only needs to be open to use it: the daemon works on its own.
 - Menu bar icon/menu not included.
 - `tmutil listbackups` is not used: no Full Disk Access permission required.
@@ -205,7 +217,8 @@ is updated.
 - `/Library/Application Support/TMScheduler/config.json`
 - `/Library/Application Support/TMScheduler/last-run.json`
 - `/Library/Application Support/TMScheduler/tmscheduler.log` (+ `.1`, `.2`, `.3`)
-- `/Library/LaunchDaemons/local.tmscheduler.nightly.plist`
+- `/Library/LaunchDaemons/local.tmscheduler.plist`
+- `/usr/local/bin/tmscheduler-daemon`
 - `/usr/local/bin/tmscheduler-run`
 - Time Machine `AutoBackup` / `AutoBackupInterval` preferences (only through
   "Open Time Machine Settings" and "Restore…")
@@ -215,20 +228,70 @@ is updated.
 <details>
 <summary><b>Manual tests</b></summary>
 
-- [ ] After **Save schedule**, `launchctl print system/local.tmscheduler.nightly`
-      shows the job.
-- [ ] `sudo launchctl kickstart -k system/local.tmscheduler.nightly` starts the
-      backup and the log records start/end.
+- [ ] After **Save schedule**, `launchctl print system/local.tmscheduler` shows the
+      daemon running, `active count = 1`, and the log records
+      `daemon start (keybag assertion: available)` followed by
+      `keybag: assertion taken`.
+- [ ] `sudo /usr/local/bin/tmscheduler-daemon --test-assertion` prints
+      `assertion: taken` and `assertion: released` (private API still present).
+- [ ] Set the scheduled time a couple of minutes ahead with the app open: the log
+      records `run: due, starting backup`, then `start` and `end: success`.
 - [ ] With the Time Machine destination off or unreachable, the daemon writes
       `skip: destination … unreachable` and does not start Time Machine.
 - [ ] With a backup already running, the daemon writes `skip: backup already running`.
-- [ ] Changing time/days in the app regenerates the plist and reloads the job.
-- [ ] With the toggle OFF, the job does not run.
-- [ ] **Restore…** removes plist and script and restores
-      `AutoBackup`/`AutoBackupInterval` to the selected values.
-- [ ] Mac asleep with the lid open at 02:00: behavior consistent with the limits
-      above.
+- [ ] Changing time/days in the app only rewrites `config.json`: the daemon picks
+      it up within 10 seconds without a restart.
+- [ ] With the toggle OFF, the plist is removed and the daemon stops.
+- [ ] **Restore…** removes plist, binaries and logs (including the 0.1.0 job) and
+      restores `AutoBackup`/`AutoBackupInterval` to the selected values.
+- [ ] `sudo kill -9` of the daemon: `launchd` restarts it and it re-takes the
+      assertion.
 - [ ] After use, `tmutil listbackups` and manual backups from the system UI work.
+
+</details>
+
+<details>
+<summary><b>Locked screen: why a daemon, and how the result is decided</b></summary>
+
+Time Machine does not complete a backup that **starts** while the device is
+locked: file-protection class A keys are evicted from the keybag on lock and
+cannot be recovered, not even by root. A backup that starts unlocked completes
+even if the screen locks during the copy, because Time Machine takes an
+`MKBAssertion` and logs `Device locking is prevented`.
+
+An assertion is an object in a process's memory, so `StartCalendarInterval` plus
+a shell script cannot hold one. The daemon does two things:
+
+1. while the Mac is unlocked it takes an assertion and renews it every 5 minutes;
+2. every 10 seconds it compares the clock with `config.json` and, inside a 60 s
+   window around the scheduled time, runs `tmscheduler-run` without waiting for
+   it (the assertion keeps being renewed during the backup).
+
+`tmutil startbackup --block` exits 0 even when the backup fails, so the result is
+decided by looking for a new entry in `SnapshotDates` for the active destination
+in `/Library/Preferences/com.apple.TimeMachine.plist`. When no snapshot appears
+the run is recorded as `failed` with the Time Machine `RESULT` (`80` =
+`BACKUP_FAILED_DEVICE_LOCKED`), and the notification says so.
+
+Reproduction of the locked-screen failure:
+
+```bash
+# lock the screen and keep the Mac awake on AC power, then
+sudo /usr/local/bin/tmscheduler-run
+
+sudo plutil -extract Destinations.0.SnapshotDates xml1 -o - \
+    /Library/Preferences/com.apple.TimeMachine.plist
+tail -3 "/Library/Application Support/TMScheduler/tmscheduler.log"
+```
+
+Without the assertion the destination gets no new date and the log says
+`end: failed device locked (RESULT 80)`; with the daemon the backup completes.
+
+Upgrade from 0.1.0 removes the old job (`local.tmscheduler.nightly`) before
+installing the new one; `config.json` and the log are preserved. Rollback:
+`sudo launchctl bootout system/local.tmscheduler`, remove
+`/Library/LaunchDaemons/local.tmscheduler.plist` and the two binaries in
+`/usr/local/bin`, then reinstall the 0.1.0 app and press **Save schedule**.
 
 </details>
 

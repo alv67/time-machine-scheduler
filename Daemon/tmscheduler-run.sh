@@ -4,6 +4,7 @@ set -uo pipefail
 CONF="/Library/Application Support/TMScheduler/config.json"
 LOG="/Library/Application Support/TMScheduler/tmscheduler.log"
 STATE="/Library/Application Support/TMScheduler/last-run.json"
+TM_PLIST="/Library/Preferences/com.apple.TimeMachine.plist"
 
 log() { printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$LOG"; }
 
@@ -103,19 +104,15 @@ PREVENT_SLEEP="$(jget preventSleep)"
 SKIP_BATTERY="$(jget skipOnBattery)"
 DO_NOTIFY="$(jget notify)"
 
-LAST_DATE="$(/usr/bin/plutil -extract date raw -o - "$STATE" 2>/dev/null || true)"
-case "$LAST_DATE" in
-    "$(date -u '+%Y-%m-%d')"*) exit 0 ;;
-esac
-
 if [ "$SKIP_BATTERY" = "true" ] && /usr/bin/pmset -g batt | /usr/bin/grep -q 'Battery Power'; then
     rotate_log
     log "skip: Mac is on battery"
     exit 0
 fi
 
+DEST_PLIST="$(/usr/bin/tmutil destinationinfo -X 2>/dev/null || true)"
+
 if [ "$REQUIRE_DEST" = "true" ]; then
-    DEST_PLIST="$(/usr/bin/tmutil destinationinfo -X 2>/dev/null || true)"
     DEST_INDEX="$(destination_index)"
     DEST_KIND="$(dest_field "Destinations.$DEST_INDEX.Kind")"
     DEST_HOST="$(destination_host)"
@@ -137,10 +134,34 @@ if /usr/bin/tmutil status -X 2>/dev/null | /usr/bin/plutil -extract Running raw 
     exit 0
 fi
 
+# `tmutil startbackup --block` esce 0 anche quando il backup fallisce: l'esito vero è la
+# comparsa di un nuovo snapshot per la destinazione attiva.
+snapshot_count() {
+    local idx
+    idx="$(destination_index)"
+    /usr/bin/plutil -extract "Destinations.$idx.SnapshotDates" xml1 -o - "$TM_PLIST" 2>/dev/null \
+        | /usr/bin/grep -c '<date>'
+}
+
+backup_result() {
+    local idx code
+    idx="$(destination_index)"
+    code="$(/usr/bin/plutil -extract "Destinations.$idx.RESULT" raw -o - "$TM_PLIST" 2>/dev/null || true)"
+    printf '%s' "${code:-0}"
+}
+
+result_reason() { # <RESULT>
+    case "$1" in
+        80) printf 'device locked (RESULT 80)' ;;
+        *) printf 'RESULT %s' "$1" ;;
+    esac
+}
+
 rotate_log
 log "start"
 write_state running 0
 START=$(/bin/date +%s)
+BEFORE="$(snapshot_count)"
 
 if [ "$PREVENT_SLEEP" = "true" ]; then
     /usr/bin/caffeinate -i /usr/bin/tmutil startbackup --auto --block
@@ -149,15 +170,25 @@ else
 fi
 RC=$?
 
+# Time Machine scrive lo snapshot (e RESULT) qualche secondo dopo la fine del run.
+ATTEMPTS=0
+while [ "$ATTEMPTS" -lt 5 ] && [ "$(snapshot_count)" -le "$BEFORE" ]; do
+    [ "$RC" -ne 0 ] && break
+    /bin/sleep 3
+    ATTEMPTS=$((ATTEMPTS + 1))
+done
+
 END=$(/bin/date +%s)
 DURATION=$((END - START))
 
-if [ "$RC" -eq 0 ]; then
+if [ "$(snapshot_count)" -gt "$BEFORE" ]; then
     write_state success "$DURATION"
     log "end: success duration=${DURATION}s"
     [ "$DO_NOTIFY" = "true" ] && notify "Backup completed in ${DURATION}s"
 else
+    REASON="$(result_reason "$(backup_result)")"
+    [ "$RC" -ne 0 ] && REASON="tmutil rc=$RC / $REASON"
     write_state failed "$DURATION"
-    log "end: failed rc=$RC duration=${DURATION}s"
-    [ "$DO_NOTIFY" = "true" ] && notify "Backup failed (rc=$RC)"
+    log "end: failed $REASON duration=${DURATION}s"
+    [ "$DO_NOTIFY" = "true" ] && notify "Backup failed: $REASON"
 fi

@@ -1,5 +1,12 @@
 import Foundation
 
+/// Ultimo esito scritto dal job e letto dall'app.
+struct LastRun: Codable, Equatable {
+    var date: Date
+    var result: String
+    var durationSeconds: Int?
+}
+
 /// Configurazione scritta dall'app e letta dal daemon.
 /// weekdays usa ISO-8601: 1 = lunedì … 7 = domenica.
 struct ScheduleConfig: Codable, Equatable {
@@ -15,13 +22,19 @@ struct ScheduleConfig: Codable, Equatable {
 }
 
 enum Paths {
-    static let label = "local.tmscheduler.nightly"
+    static let label = "local.tmscheduler"
     static let supportDir = "/Library/Application Support/TMScheduler"
     static let config = supportDir + "/config.json"
     static let lastRun = supportDir + "/last-run.json"
     static let log = supportDir + "/tmscheduler.log"
+    static let daemon = "/usr/local/bin/tmscheduler-daemon"
+    /// Esegue il backup singolo su richiesta del daemon (nessuna schedulazione qui).
     static let script = "/usr/local/bin/tmscheduler-run"
     static let plist = "/Library/LaunchDaemons/" + label + ".plist"
+
+    /// Job della 0.1.0, rimosso al primo avvio della versione nuova.
+    static let legacyLabel = "local.tmscheduler.nightly"
+    static let legacyPlist = "/Library/LaunchDaemons/" + legacyLabel + ".plist"
 }
 
 enum ScheduleLogic {
@@ -31,11 +44,6 @@ enum ScheduleLogic {
         return (1...7).map { iso in
             symbols[iso == 7 ? 0 : iso].capitalized
         }
-    }
-
-    /// launchd usa tm_wday: 0 = domenica … 6 = sabato.
-    static func launchdWeekday(iso: Int) -> Int {
-        iso == 7 ? 0 : iso
     }
 
     /// Prossima occorrenza della pianificazione dopo `now`, o nil se disattivata.
@@ -57,21 +65,45 @@ enum ScheduleLogic {
         return nil
     }
 
+    /// Vero se `now` è dentro la finestra dell'orario pianificato e quel run non è ancora stato
+    /// fatto. La finestra stretta evita il recupero del backup saltato (Mac spento o in sleep).
+    static func isDue(
+        at now: Date,
+        config: ScheduleConfig,
+        lastRun: Date?,
+        grace: TimeInterval = 60,
+        calendar: Calendar = .current
+    ) -> Bool {
+        guard config.enabled else { return false }
+        let weekday = calendar.component(.weekday, from: now)
+        let iso = weekday == 1 ? 7 : weekday - 1
+        guard config.weekdays.contains(iso) else { return false }
+
+        var components = calendar.dateComponents([.year, .month, .day], from: now)
+        components.hour = config.hour
+        components.minute = config.minute
+        components.second = 0
+        guard let slot = calendar.date(from: components) else { return false }
+
+        guard now >= slot, now.timeIntervalSince(slot) < grace else { return false }
+        guard let lastRun else { return true }
+        return lastRun < slot
+    }
+
     /// Host di una destinazione Time Machine; nil per destinazioni locali (file://).
     static func destinationHost(from url: String) -> String? {
         URL(string: url)?.host
     }
 
-    /// Plist del LaunchDaemon, con una voce StartCalendarInterval per ogni giorno scelto.
-    static func plistData(config: ScheduleConfig) throws -> Data {
-        let intervals = config.weekdays.sorted().map { iso in
-            ["Weekday": launchdWeekday(iso: iso), "Hour": config.hour, "Minute": config.minute]
-        }
+    /// Plist del daemon: parte al boot e launchd lo riavvia se esce. Orari e giorni stanno nel
+    /// config.json letto dal processo, non in StartCalendarInterval.
+    static func plistData() throws -> Data {
         let plist: [String: Any] = [
             "Label": Paths.label,
-            "ProgramArguments": ["/bin/bash", Paths.script],
-            "StartCalendarInterval": intervals,
-            "RunAtLoad": false,
+            "ProgramArguments": [Paths.daemon],
+            "RunAtLoad": true,
+            "KeepAlive": true,
+            "ProcessType": "Background",
             "StandardErrorPath": "/var/log/tmscheduler.err",
         ]
         return try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)

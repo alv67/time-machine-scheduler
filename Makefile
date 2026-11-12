@@ -23,11 +23,20 @@ HOST_ARCH := $(shell uname -m)
 SWIFTFLAGS := -O -parse-as-library -sdk $(SDK)
 SIGN_ID ?= -
 
+# Daemon: un binario che tiene l'assertion sul keybag e lancia il backup. Compilato per
+# l'architettura host, non universale: viene installato sulla macchina che lo esegue.
+DAEMON_SRC := App/Schedule.swift Daemon/main.swift
+DAEMON := $(BUILD)/$(APP_NAME)-daemon
+
 .PHONY: app test run clean icon refresh-icon dmg zip release checksums install
 
 app: $(APP)
 
 icon: $(ICON_PNG)
+
+$(DAEMON): $(DAEMON_SRC)
+	mkdir -p $(BUILD)
+	swiftc -O -sdk $(SDK) -target $(HOST_ARCH)-apple-macos$(MACOS_MIN) $(DAEMON_SRC) -o $@
 
 refresh-icon: app
 	touch $(APP)
@@ -47,7 +56,7 @@ $(ICON_ICNS): $(ICON_PNG)
 	done
 	iconutil -c icns $(ICONSET) -o $(ICON_ICNS)
 
-$(APP): App/*.swift Info.plist Daemon/tmscheduler-run.sh $(ICON_ICNS) $(wildcard Resources/*.lproj/*.strings)
+$(APP): App/*.swift Info.plist Daemon/tmscheduler-run.sh $(DAEMON) $(ICON_ICNS) $(wildcard Resources/*.lproj/*.strings)
 	mkdir -p $(APP)/Contents/MacOS $(APP)/Contents/Resources
 	set -e; for arch in $(ARCHS); do \
 		mkdir -p $(BUILD)/$$arch; \
@@ -56,6 +65,7 @@ $(APP): App/*.swift Info.plist Daemon/tmscheduler-run.sh $(ICON_ICNS) $(wildcard
 	lipo -create $(foreach arch,$(ARCHS),$(BUILD)/$(arch)/$(APP_NAME)) -output $(APP)/Contents/MacOS/$(APP_NAME)
 	cp Info.plist $(APP)/Contents/Info.plist
 	cp Daemon/tmscheduler-run.sh $(APP)/Contents/Resources/tmscheduler-run.sh
+	cp $(DAEMON) $(APP)/Contents/Resources/tmscheduler-daemon
 	cp $(ICON_ICNS) $(APP)/Contents/Resources/AppIcon.icns
 	for lproj in Resources/*.lproj; do cp -R "$$lproj" $(APP)/Contents/Resources/; done
 	codesign --force --deep --sign "$(SIGN_ID)" $(APP)

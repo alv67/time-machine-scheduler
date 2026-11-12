@@ -43,6 +43,8 @@ struct HelpView: View {
                     "help.limits.1",
                     "help.limits.2",
                     "help.limits.3",
+                    "help.limits.4",
+                    "help.limits.5",
                 ])
 
                 Divider()

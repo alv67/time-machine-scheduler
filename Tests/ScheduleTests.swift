@@ -10,11 +10,6 @@ struct ScheduleTests {
             calendar.date(from: DateComponents(year: year, month: month, day: day, hour: hour, minute: minute))!
         }
 
-        // ISO -> tm_wday
-        assert(ScheduleLogic.launchdWeekday(iso: 1) == 1)
-        assert(ScheduleLogic.launchdWeekday(iso: 6) == 6)
-        assert(ScheduleLogic.launchdWeekday(iso: 7) == 0)
-
         // host ricavato dalla destinazione Time Machine
         assert(ScheduleLogic.destinationHost(from: "smb://utente@nas._smb._tcp.local./Backup") == "nas._smb._tcp.local.")
         assert(ScheduleLogic.destinationHost(from: "smb://utente@192.168.1.251/Backup") == "192.168.1.251")
@@ -40,19 +35,36 @@ struct ScheduleTests {
         config.enabled = false
         assert(ScheduleLogic.nextRun(after: now, config: config, calendar: calendar) == nil)
 
-        // plist: una voce per giorno con conversione corretta
-        config.enabled = true
-        config.weekdays = [7, 1]
-        let data = try! ScheduleLogic.plistData(config: config)
+        // plist del daemon: parte al boot, launchd lo riavvia, nessuna schedulazione in launchd
+        let data = try! ScheduleLogic.plistData()
         let plist = try! PropertyListSerialization.propertyList(from: data, options: [], format: nil) as! [String: Any]
         assert(plist["Label"] as? String == Paths.label)
-        assert(plist["RunAtLoad"] as? Bool == false)
-        assert(plist["ProgramArguments"] as? [String] == ["/bin/bash", Paths.script])
+        assert(plist["RunAtLoad"] as? Bool == true)
+        assert(plist["KeepAlive"] as? Bool == true)
+        assert(plist["ProgramArguments"] as? [String] == [Paths.daemon])
+        assert(plist["StartCalendarInterval"] == nil)
 
-        let intervals = plist["StartCalendarInterval"] as! [[String: Int]]
-        assert(intervals.count == 2)
-        assert(intervals[0] == ["Weekday": 1, "Hour": 2, "Minute": 0]) // lunedì
-        assert(intervals[1] == ["Weekday": 0, "Hour": 2, "Minute": 0]) // domenica
+        // isDue: la finestra è stretta, il backup saltato non si recupera
+        config = ScheduleConfig()
+        config.weekdays = [1, 2, 3, 4, 5, 6, 7]
+        config.hour = 2
+        config.minute = 0
+        let slot = date(2026, 11, 10, 2, 0) // martedì
+        let at = { (seconds: Int) in slot.addingTimeInterval(TimeInterval(seconds)) }
+
+        assert(ScheduleLogic.isDue(at: at(0), config: config, lastRun: nil, calendar: calendar))
+        assert(ScheduleLogic.isDue(at: at(30), config: config, lastRun: date(2026, 11, 9, 2, 4), calendar: calendar))
+        assert(!ScheduleLogic.isDue(at: at(90), config: config, lastRun: nil, calendar: calendar))
+        assert(!ScheduleLogic.isDue(at: at(-30), config: config, lastRun: nil, calendar: calendar))
+        // già eseguito in questa finestra
+        assert(!ScheduleLogic.isDue(at: at(30), config: config, lastRun: at(10), calendar: calendar))
+        // giorno non pianificato
+        config.weekdays = [3]
+        assert(!ScheduleLogic.isDue(at: at(0), config: config, lastRun: nil, calendar: calendar))
+        // servizio spento
+        config.weekdays = [1, 2, 3, 4, 5, 6, 7]
+        config.enabled = false
+        assert(!ScheduleLogic.isDue(at: at(0), config: config, lastRun: nil, calendar: calendar))
 
         print("ScheduleLogic: tutti i test superati")
     }
