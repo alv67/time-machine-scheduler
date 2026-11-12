@@ -92,6 +92,31 @@ private func lastRunDate() -> Date? {
     return (try? decoder.decode(LastRun.self, from: data))?.date
 }
 
+/// Notifica all'utente davanti al console, come fa lo script a fine backup.
+private func notify(_ message: String) {
+    guard let attributes = try? FileManager.default.attributesOfItem(atPath: "/dev/console"),
+          let owner = attributes[.ownerAccountID] as? NSNumber,
+          owner.uint32Value != 0
+    else { return }
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+    process.arguments = [
+        "asuser", String(owner.uint32Value),
+        "/usr/bin/osascript", "-e",
+        "display notification \"\(message)\" with title \"Time Machine Scheduler\"",
+    ]
+    process.standardOutput = FileHandle.nullDevice
+    process.standardError = FileHandle.nullDevice
+    try? process.run()
+    process.waitUntilExit()
+}
+
+private let clockFormatter: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.dateFormat = "HH:mm"
+    return formatter
+}()
+
 private func spawnRun() -> Process? {
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/bin/bash")
@@ -118,12 +143,17 @@ if CommandLine.arguments.contains("--test-assertion") {
     exit(0)
 }
 
-log("daemon start (keybag assertion: \(Keybag.available ? "available" : "missing symbol"))")
+// Solo per verificare il percorso degradato: il daemon si comporta come se il
+// simbolo non esistesse e salta i run invece di farli fallire a schermo bloccato.
+let keybagEnabled = !CommandLine.arguments.contains("--no-keybag")
+
+log("daemon start (keybag assertion: \(keybagEnabled ? (Keybag.available ? "available" : "missing symbol") : "disabled by flag"))")
 
 var config = loadConfig() ?? ScheduleConfig()
 var assertion: CFTypeRef?
 var lastRenewal = Date.distantPast
-var lastStart = Date.distantPast
+var lastAttempt = Date.distantPast
+var pendingSkip: Date?
 var job: Process?
 
 while true {
@@ -139,10 +169,17 @@ while true {
     }
 
     if assertion == nil {
-        if let taken = Keybag.take() {
+        if keybagEnabled, let taken = Keybag.take() {
             assertion = taken
             lastRenewal = now
             log("keybag: assertion taken")
+            // Il run saltato si annuncia quando qualcuno sblocca, non alle 02:00.
+            if let skipped = pendingSkip {
+                pendingSkip = nil
+                let time = clockFormatter.string(from: skipped)
+                log("notify: run skipped at \(time), device was locked")
+                notify("Backup skipped at \(time): the Mac was locked")
+            }
         }
     } else if now.timeIntervalSince(lastRenewal) >= renewInterval {
         // Nuova assertion prima di rilasciare la vecchia: nessun buco.
@@ -156,13 +193,20 @@ while true {
 
     if job?.isRunning != true {
         job = nil
-        if now.timeIntervalSince(lastStart) >= dueGrace,
+        if now.timeIntervalSince(lastAttempt) >= dueGrace,
            ScheduleLogic.isDue(at: now, config: config, lastRun: lastRunDate(), grace: dueGrace) {
-            log("run: due, starting backup")
-            // Il processo va trattenuto: se lo si lascia cadere il figlio viene terminato.
-            if let process = spawnRun() {
-                job = process
-                lastStart = now
+            lastAttempt = now
+            if assertion == nil {
+                // Senza asserzione le chiavi di classe A sono perse: il backup fallirebbe
+                // dopo ~20 minuti. Meglio dirlo subito, senza avviarlo.
+                log("skip: keybag locked, login required")
+                pendingSkip = now
+            } else {
+                log("run: due, starting backup")
+                // Il processo va trattenuto: se lo si lascia cadere il figlio viene terminato.
+                if let process = spawnRun() {
+                    job = process
+                }
             }
         }
     }

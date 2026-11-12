@@ -240,6 +240,9 @@ is updated.
       `keybag: assertion taken`.
 - [ ] `sudo /usr/local/bin/tmscheduler-daemon --test-assertion` prints
       `assertion: taken` and `assertion: released` (private API still present).
+- [ ] `sudo /usr/local/bin/tmscheduler-daemon --no-keybag` simulates a closed
+      keybag: at the scheduled time the log says
+      `skip: keybag locked, login required` and no backup starts.
 - [ ] Set the scheduled time a couple of minutes ahead with the app open: the log
       records `run: due, starting backup`, then `start` and `end: success`.
 - [ ] With the Time Machine destination off or unreachable, the daemon writes
@@ -278,6 +281,11 @@ decided by looking for a new entry in `SnapshotDates` for the active destination
 in `/Library/Preferences/com.apple.TimeMachine.plist`. When no snapshot appears
 the run is recorded as `failed` with the Time Machine `RESULT` (`80` =
 `BACKUP_FAILED_DEVICE_LOCKED`), and the notification says so.
+
+If the keybag is closed at the scheduled time (for example after a boot with
+nobody logged in) the run is not started at all: the log says
+`skip: keybag locked, login required` and the notification arrives at the next
+unlock, when it can be seen.
 
 Reproduction of the locked-screen failure:
 
