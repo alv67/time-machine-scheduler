@@ -13,6 +13,7 @@
 "options.requireDestination" = "Start only if the destination is reachable";
 "options.preventSleep" = "Prevent sleep during backup";
 "options.skipOnBattery" = "Skip when the Mac is on battery";
+"options.keepAwake" = "Prevent the Mac from going to sleep";
 "options.notify" = "Notify when backup ends";
 
 "status.lastBackup" = "Last backup";
@@ -41,7 +42,7 @@
 "error.restoreFrequency" = "The scheduler was removed, but Time Machine did not apply “%@”. Set it in the page that just opened.";
 "error.cancelled" = "Operation cancelled.";
 "error.scriptCreate" = "Unable to create the installation script.";
-"error.missingScript" = "Resource tmscheduler-run.sh is missing from the app.";
+"error.missingScript" = "A bundled resource (tmscheduler-run.sh or tmscheduler-daemon) is missing from the app.";
 "error.unknown" = "Unknown error.";
 
 "frequency.manual" = "Manually";
@@ -98,6 +99,7 @@
 "help.options.2" = "“Prevent sleep” uses caffeinate -i during the backup.";
 "help.options.3" = "“Skip when the Mac is on battery” avoids backups while the Mac is not connected to power.";
 "help.options.4" = "“Notify when backup ends” shows a system notification.";
+"help.options.5" = "“Prevent the Mac from going to sleep” keeps the Mac awake while the service is active (the display can still sleep). Use it when the Mac would otherwise be asleep at the scheduled time; opening the lid or an external display changes nothing, a Mac that is off cannot be woken by any schedule.";
 
 "help.backup.title" = "Backup and log";
 "help.backup.1" = "“Back up now” starts a backup immediately, outside the schedule.";
@@ -110,5 +112,7 @@
 "help.limits.1" = "A powered-off Mac cannot be woken by any schedule (Apple Silicon).";
 "help.limits.2" = "caffeinate does not prevent sleep with the lid closed.";
 "help.limits.3" = "The app window can be closed: the daemon keeps running.";
+"help.limits.4" = "At the scheduled time the Mac must be awake and the session unlocked: with the device locked Time Machine cannot read some files of every account. The display can be off, the session cannot be locked.";
+"help.limits.5" = "If the Mac is off or asleep at the scheduled time the backup is not caught up on wake: it waits for the next scheduled time.";
 
 "help.github" = "Project GitHub page";

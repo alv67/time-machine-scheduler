@@ -1,12 +1,6 @@
 import AppKit
 import Foundation
 
-struct LastRun: Codable {
-    var date: Date
-    var result: String
-    var durationSeconds: Int?
-}
-
 struct TMStatus: Equatable {
     var running = false
     var phase: String?

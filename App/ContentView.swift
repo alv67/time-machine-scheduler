@@ -111,6 +111,7 @@ struct ContentView: View {
                 .font(.headline)
             Toggle("options.requireDestination", isOn: $model.config.requireDestination)
             Toggle("options.preventSleep", isOn: $model.config.preventSleep)
+            Toggle("options.keepAwake", isOn: $model.config.keepAwake)
             Toggle("options.skipOnBattery", isOn: $model.config.skipOnBattery)
             Toggle("options.notify", isOn: $model.config.notify)
         }

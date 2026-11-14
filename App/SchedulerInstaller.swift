@@ -48,40 +48,55 @@ enum SchedulerInstaller {
         guard let scriptURL = Bundle.main.url(forResource: "tmscheduler-run", withExtension: "sh") else {
             throw InstallerError.failed(L("error.missingScript"))
         }
+        guard let daemonURL = Bundle.main.url(forResource: "tmscheduler-daemon", withExtension: nil) else {
+            throw InstallerError.failed(L("error.missingScript"))
+        }
 
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         try encoder.encode(config).write(to: temp.appendingPathComponent("config.json"))
         try fileManager.copyItem(at: scriptURL, to: temp.appendingPathComponent("tmscheduler-run"))
-        try ScheduleLogic.plistData(config: config).write(to: temp.appendingPathComponent("local.tmscheduler.nightly.plist"))
+        try fileManager.copyItem(at: daemonURL, to: temp.appendingPathComponent("tmscheduler-daemon"))
+        try ScheduleLogic.plistData().write(to: temp.appendingPathComponent(Paths.label + ".plist"))
 
         let installPlist = config.enabled
             ? """
-            /usr/bin/install -m 644 '\(temp.path)/local.tmscheduler.nightly.plist' '\(Paths.plist)'
+            /usr/bin/install -m 644 '\(temp.path)/\(Paths.label).plist' '\(Paths.plist)'
             /bin/launchctl bootstrap system '\(Paths.plist)'
             """
             : "/bin/rm -f '\(Paths.plist)'"
 
+        // I binari nuovi esistono prima del bootout: se qualcosa fallisce non resti senza daemon.
         let script = """
         #!/bin/bash
         set -euo pipefail
         /usr/bin/install -d -m 755 '\(Paths.supportDir)'
-        /bin/launchctl bootout system '\(Paths.plist)' >/dev/null 2>&1 || true
-        /usr/bin/install -m 644 '\(temp.path)/config.json' '\(Paths.config)'
+        /usr/bin/install -m 755 '\(temp.path)/tmscheduler-daemon' '\(Paths.daemon)'
         /usr/bin/install -m 755 '\(temp.path)/tmscheduler-run' '\(Paths.script)'
+        /usr/bin/install -m 644 '\(temp.path)/config.json' '\(Paths.config)'
+        /bin/launchctl bootout system/\(Paths.legacyLabel) >/dev/null 2>&1 || true
+        /bin/rm -f '\(Paths.legacyPlist)'
+        /bin/launchctl bootout system/\(Paths.label) >/dev/null 2>&1 || true
+        /bin/sleep 1
         \(installPlist)
         """
         try runScript(script)
     }
 
-    /// Rimuove scheduler e script e riporta Time Machine alla frequenza scelta.
+    /// Rimuove daemon, script e job (anche quello della 0.1.0) e riporta Time Machine alla
+    /// frequenza scelta.
     static func restore(frequency: RestoreFrequency) throws {
         var lines = [
             "#!/bin/bash",
             "set -uo pipefail",
-            "/bin/launchctl bootout system '\(Paths.plist)' >/dev/null 2>&1 || true",
+            "/bin/launchctl bootout system/\(Paths.label) >/dev/null 2>&1 || true",
+            "/bin/launchctl bootout system/\(Paths.legacyLabel) >/dev/null 2>&1 || true",
             "/bin/rm -f '\(Paths.plist)'",
+            "/bin/rm -f '\(Paths.legacyPlist)'",
+            "/bin/rm -f '\(Paths.daemon)'",
             "/bin/rm -f '\(Paths.script)'",
+            // Il daemon arma un risveglio: senza questo resterebbe in lista anche dopo la rimozione.
+            "if [ -f '\(Paths.wakeState)' ]; then /usr/bin/pmset schedule cancel wake \"$(/bin/cat '\(Paths.wakeState)')\" >/dev/null 2>&1 || true; fi",
             "/bin/rm -rf '\(Paths.supportDir)'",
         ]
         if frequency.autoBackup, let interval = frequency.interval {

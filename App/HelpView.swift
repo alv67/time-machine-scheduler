@@ -28,6 +28,7 @@ struct HelpView: View {
                     "help.options.2",
                     "help.options.3",
                     "help.options.4",
+                    "help.options.5",
                 ])
 
                 section("help.backup.title", [
@@ -43,6 +44,8 @@ struct HelpView: View {
                     "help.limits.1",
                     "help.limits.2",
                     "help.limits.3",
+                    "help.limits.4",
+                    "help.limits.5",
                 ])
 
                 Divider()
