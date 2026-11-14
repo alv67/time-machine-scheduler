@@ -95,6 +95,8 @@ enum SchedulerInstaller {
             "/bin/rm -f '\(Paths.legacyPlist)'",
             "/bin/rm -f '\(Paths.daemon)'",
             "/bin/rm -f '\(Paths.script)'",
+            // Il daemon arma un risveglio: senza questo resterebbe in lista anche dopo la rimozione.
+            "if [ -f '\(Paths.wakeState)' ]; then /usr/bin/pmset schedule cancel wake \"$(/bin/cat '\(Paths.wakeState)')\" >/dev/null 2>&1 || true; fi",
             "/bin/rm -rf '\(Paths.supportDir)'",
         ]
         if frequency.autoBackup, let interval = frequency.interval {

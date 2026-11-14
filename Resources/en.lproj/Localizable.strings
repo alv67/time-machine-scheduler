@@ -112,7 +112,7 @@
 "help.limits.1" = "A powered-off Mac cannot be woken by any schedule (Apple Silicon).";
 "help.limits.2" = "caffeinate does not prevent sleep with the lid closed.";
 "help.limits.3" = "The app window can be closed: the daemon keeps running.";
-"help.limits.4" = "While the Mac is unlocked the daemon holds a keybag assertion through a private macOS framework: if Apple removes it, backups that start with the screen locked fail again (the log says so).";
+"help.limits.4" = "At the scheduled time the Mac must be awake and the session unlocked: with the device locked Time Machine cannot read some files of every account. The display can be off, the session cannot be locked.";
 "help.limits.5" = "If the Mac is off or asleep at the scheduled time the backup is not caught up on wake: it waits for the next scheduled time.";
 
 "help.github" = "Project GitHub page";

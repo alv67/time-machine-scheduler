@@ -23,8 +23,9 @@ HOST_ARCH := $(shell uname -m)
 SWIFTFLAGS := -O -parse-as-library -sdk $(SDK)
 SIGN_ID ?= -
 
-# Daemon: un binario che tiene l'assertion sul keybag e lancia il backup. Compilato per
-# l'architettura host, non universale: viene installato sulla macchina che lo esegue.
+# Daemon: un binario che impedisce lo stand-by, arma il risveglio e lancia il backup.
+# Compilato per l'architettura host, non universale: viene installato sulla macchina che
+# lo esegue.
 DAEMON_SRC := App/Schedule.swift Daemon/main.swift
 DAEMON := $(BUILD)/$(APP_NAME)-daemon
 

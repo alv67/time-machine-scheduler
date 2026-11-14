@@ -1,16 +1,26 @@
-import Darwin
 import Foundation
 import IOKit.pwr_mgt
 
-// Daemon unico: tiene l'assertion sul keybag mentre la macchina è sbloccata e all'orario
-// pianificato lancia `tmscheduler-run` (che fa il backup). Senza assertion Time Machine non
-// completa un backup avviato a schermo bloccato (BACKUP_FAILED_DEVICE_LOCKED).
+// Il backup notturno richiede due cose: il Mac sveglio e la sessione sbloccata. Il primo lo
+// garantisce l'asserzione di potenza qui sotto; il secondo è un'impostazione dell'utente
+// (`screenLock`), perché Time Machine non legge i file di classe A a dispositivo bloccato e
+// nessun processo di terzi può cambiarlo: l'asserzione sul keybag non ha effetto senza
+// l'entitlement di backupd.
 
 private let tickInterval: TimeInterval = 10
-private let renewInterval: TimeInterval = 300
 private let dueGrace: TimeInterval = 60
+/// Risveglio armato due minuti prima dell'orario pianificato.
+private let wakeLead: TimeInterval = 120
+/// Salto fra due tick oltre il quale il Mac è andato in stop.
+private let sleepThreshold: TimeInterval = 120
 
 private let logURL = URL(fileURLWithPath: Paths.log)
+
+private let clockFormatter: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.dateFormat = "HH:mm"
+    return formatter
+}()
 
 private func log(_ message: String) {
     let formatter = DateFormatter()
@@ -26,32 +36,27 @@ private func log(_ message: String) {
     }
 }
 
-/// API privata di MobileKeyBag, caricata a runtime: se il simbolo sparisce il daemon continua a
-/// schedulare (il backup fallirà a dispositivo bloccato) invece di non partire.
-private enum Keybag {
-    private typealias TakeFn = @convention(c) (CFDictionary, UnsafeMutablePointer<CFTypeRef?>?) -> Int32
-
-    private static let takeFn: TakeFn? = {
-        guard let handle = dlopen("/System/Library/PrivateFrameworks/MobileKeyBag.framework/MobileKeyBag", RTLD_NOW),
-              let symbol = dlsym(handle, "MKBDeviceLockAssertion")
-        else { return nil }
-        return unsafeBitCast(symbol, to: TakeFn.self)
-    }()
-
-    static var available: Bool { takeFn != nil }
-
-    /// `options` deve essere un dizionario (NULL fa crashare la funzione). L'assertion vive finché
-    /// il processo la trattiene e si rilascia con CFRelease.
-    static func take() -> CFTypeRef? {
-        guard let takeFn else { return nil }
-        var assertion: CFTypeRef?
-        guard takeFn(NSDictionary() as CFDictionary, &assertion) == 0 else { return nil }
-        return assertion
-    }
+/// Notifica all'utente davanti al console, come fa lo script a fine backup.
+private func notify(_ message: String) {
+    guard let attributes = try? FileManager.default.attributesOfItem(atPath: "/dev/console"),
+          let owner = attributes[.ownerAccountID] as? NSNumber,
+          owner.uint32Value != 0
+    else { return }
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+    process.arguments = [
+        "asuser", String(owner.uint32Value),
+        "/usr/bin/osascript", "-e",
+        "display notification \"\(message)\" with title \"Time Machine Scheduler\"",
+    ]
+    process.standardOutput = FileHandle.nullDevice
+    process.standardError = FileHandle.nullDevice
+    try? process.run()
+    process.waitUntilExit()
 }
 
 /// Stand-by: finché il servizio è attivo e l'opzione è on, il Mac non va in sleep da solo.
-/// Lo schermo può comunque spegnersi.
+/// Lo schermo può comunque spegnersi. Non copre lo stop manuale né il coperchio chiuso.
 private enum Power {
     private(set) static var held = false
     private static var id: IOPMAssertionID = 0
@@ -92,31 +97,6 @@ private func lastRunDate() -> Date? {
     return (try? decoder.decode(LastRun.self, from: data))?.date
 }
 
-/// Notifica all'utente davanti al console, come fa lo script a fine backup.
-private func notify(_ message: String) {
-    guard let attributes = try? FileManager.default.attributesOfItem(atPath: "/dev/console"),
-          let owner = attributes[.ownerAccountID] as? NSNumber,
-          owner.uint32Value != 0
-    else { return }
-    let process = Process()
-    process.executableURL = URL(fileURLWithPath: "/bin/launchctl")
-    process.arguments = [
-        "asuser", String(owner.uint32Value),
-        "/usr/bin/osascript", "-e",
-        "display notification \"\(message)\" with title \"Time Machine Scheduler\"",
-    ]
-    process.standardOutput = FileHandle.nullDevice
-    process.standardError = FileHandle.nullDevice
-    try? process.run()
-    process.waitUntilExit()
-}
-
-private let clockFormatter: DateFormatter = {
-    let formatter = DateFormatter()
-    formatter.dateFormat = "HH:mm"
-    return formatter
-}()
-
 private func spawnRun() -> Process? {
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/bin/bash")
@@ -132,28 +112,51 @@ private func spawnRun() -> Process? {
     }
 }
 
-if CommandLine.arguments.contains("--test-assertion") {
-    guard Keybag.available else { print("assertion: symbol missing"); exit(2) }
-    var held = Keybag.take()
-    guard held != nil else { print("assertion: failed"); exit(1) }
-    print("assertion: taken")
-    Thread.sleep(forTimeInterval: 2)
-    held = nil
-    print("assertion: released")
-    exit(0)
+@discardableResult
+private func execute(_ path: String, _ arguments: [String]) -> Int32 {
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: path)
+    process.arguments = arguments
+    process.standardOutput = FileHandle.nullDevice
+    process.standardError = FileHandle.nullDevice
+    do {
+        try process.run()
+    } catch {
+        return -1
+    }
+    process.waitUntilExit()
+    return process.terminationStatus
 }
 
-// Solo per verificare il percorso degradato: il daemon si comporta come se il
-// simbolo non esistesse e salta i run invece di farli fallire a schermo bloccato.
-let keybagEnabled = !CommandLine.arguments.contains("--no-keybag")
+/// Formato accettato da `pmset schedule`.
+private func wakeStamp(for date: Date) -> String {
+    let formatter = DateFormatter()
+    formatter.dateFormat = "MM/dd/yyyy HH:mm:ss"
+    return formatter.string(from: date)
+}
 
-log("daemon start (keybag assertion: \(keybagEnabled ? (Keybag.available ? "available" : "missing symbol") : "disabled by flag"))")
+/// Un risveglio programmato non sopravvive a un riavvio del Mac, quindi va riarmato a ogni
+/// avvio; se cambia l'orario si annulla il precedente per non accumularli.
+private func armWake(for slot: Date, now: Date, armed: inout String?) {
+    let wakeAt = slot.addingTimeInterval(-wakeLead)
+    guard wakeAt > now else { return }
+    let stamp = wakeStamp(for: wakeAt)
+    guard stamp != armed else { return }
+    if let previous = armed {
+        execute("/usr/bin/pmset", ["schedule", "cancel", "wake", previous])
+    }
+    execute("/usr/bin/pmset", ["schedule", "wake", stamp])
+    armed = stamp
+    try? (stamp + "\n").write(toFile: Paths.wakeState, atomically: true, encoding: .utf8)
+    log("wake: armed for \(stamp)")
+}
+
+log("daemon start")
 
 var config = loadConfig() ?? ScheduleConfig()
-var assertion: CFTypeRef?
-var lastRenewal = Date.distantPast
+var lastTick = Date()
 var lastAttempt = Date.distantPast
-var pendingSkip: Date?
+var armedWake: String?
 var job: Process?
 
 while true {
@@ -168,27 +171,20 @@ while true {
         Power.allowSleep()
     }
 
-    if assertion == nil {
-        if keybagEnabled, let taken = Keybag.take() {
-            assertion = taken
-            lastRenewal = now
-            log("keybag: assertion taken")
-            // Il run saltato si annuncia quando qualcuno sblocca, non alle 02:00.
-            if let skipped = pendingSkip {
-                pendingSkip = nil
-                let time = clockFormatter.string(from: skipped)
-                log("notify: run skipped at \(time), device was locked")
-                notify("Backup skipped at \(time): the Mac was locked")
-            }
-        }
-    } else if now.timeIntervalSince(lastRenewal) >= renewInterval {
-        // Nuova assertion prima di rilasciare la vecchia: nessun buco.
-        if let taken = Keybag.take() {
-            assertion = taken
-            lastRenewal = now
-        } else {
-            log("keybag: renewal failed")
-        }
+    // Il Mac è andato in stop: il run di quella notte è perso, e recuperarlo al risveglio
+    // non ha senso (Time Machine ripartirebbe a metà mattina).
+    if now.timeIntervalSince(lastTick) > sleepThreshold,
+       let missed = ScheduleLogic.nextRun(after: lastTick, config: config),
+       missed <= now {
+        let time = clockFormatter.string(from: missed)
+        log("missed: Mac asleep at \(time)")
+        notify("Backup missed at \(time): the Mac was asleep")
+        lastAttempt = now
+    }
+    lastTick = now
+
+    if let next = ScheduleLogic.nextRun(after: now, config: config) {
+        armWake(for: next, now: now, armed: &armedWake)
     }
 
     if job?.isRunning != true {
@@ -196,17 +192,10 @@ while true {
         if now.timeIntervalSince(lastAttempt) >= dueGrace,
            ScheduleLogic.isDue(at: now, config: config, lastRun: lastRunDate(), grace: dueGrace) {
             lastAttempt = now
-            if assertion == nil {
-                // Senza asserzione le chiavi di classe A sono perse: il backup fallirebbe
-                // dopo ~20 minuti. Meglio dirlo subito, senza avviarlo.
-                log("skip: keybag locked, login required")
-                pendingSkip = now
-            } else {
-                log("run: due, starting backup")
-                // Il processo va trattenuto: se lo si lascia cadere il figlio viene terminato.
-                if let process = spawnRun() {
-                    job = process
-                }
+            log("run: due, starting backup")
+            // Il processo va trattenuto: se lo si lascia cadere il figlio viene terminato.
+            if let process = spawnRun() {
+                job = process
             }
         }
     }

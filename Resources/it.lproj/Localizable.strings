@@ -112,7 +112,7 @@
 "help.limits.1" = "Un Mac spento non può essere acceso da nessuna pianificazione (Apple Silicon).";
 "help.limits.2" = "caffeinate non impedisce il sonno con il coperchio chiuso.";
 "help.limits.3" = "La finestra dell'app può essere chiusa: il daemon continua a funzionare.";
-"help.limits.4" = "Mentre il Mac è sbloccato il daemon tiene un'asserzione sul keybag tramite un framework privato di macOS: se Apple la rimuove, i backup avviati a schermo bloccato tornano a fallire (il log lo segnala).";
+"help.limits.4" = "All'orario previsto il Mac deve essere sveglio e la sessione sbloccata: a dispositivo bloccato Time Machine non legge alcuni file di ogni utente. Lo schermo può essere spento, la sessione no.";
 "help.limits.5" = "Se il Mac è spento o in sleep all'orario previsto il backup non viene recuperato al risveglio: si aspetta il prossimo orario pianificato.";
 
 "help.github" = "Pagina GitHub del progetto";

@@ -48,6 +48,8 @@ enum Paths {
     static let config = supportDir + "/config.json"
     static let lastRun = supportDir + "/last-run.json"
     static let log = supportDir + "/tmscheduler.log"
+    /// Data del risveglio armato con pmset, per poterlo annullare alla disinstallazione.
+    static let wakeState = supportDir + "/wake"
     static let daemon = "/usr/local/bin/tmscheduler-daemon"
     /// Esegue il backup singolo su richiesta del daemon (nessuna schedulazione qui).
     static let script = "/usr/local/bin/tmscheduler-run"

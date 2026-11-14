@@ -135,24 +135,26 @@ if /usr/bin/tmutil status -X 2>/dev/null | /usr/bin/plutil -extract Running raw 
 fi
 
 # `tmutil startbackup --block` esce 0 anche quando il backup fallisce: l'esito vero è la
-# comparsa di un nuovo snapshot per la destinazione attiva.
-snapshot_count() {
+# comparsa di uno snapshot più recente. Il conteggio non serve: il thinning di Time Machine
+# cancella i backup vecchi e il numero può calare mentre ne appare uno nuovo.
+latest_snapshot() {
     local idx
     idx="$(destination_index)"
     /usr/bin/plutil -extract "Destinations.$idx.SnapshotDates" xml1 -o - "$TM_PLIST" 2>/dev/null \
-        | /usr/bin/grep -c '<date>'
+        | /usr/bin/sed -n 's#.*<date>\(.*\)</date>.*#\1#p' \
+        | /usr/bin/sort | /usr/bin/tail -1
 }
 
 backup_result() {
-    local idx code
+    local idx
     idx="$(destination_index)"
-    code="$(/usr/bin/plutil -extract "Destinations.$idx.RESULT" raw -o - "$TM_PLIST" 2>/dev/null || true)"
-    printf '%s' "${code:-0}"
+    /usr/bin/plutil -extract "Destinations.$idx.RESULT" raw -o - "$TM_PLIST" 2>/dev/null || true
 }
 
 result_reason() { # <RESULT>
     case "$1" in
         80) printf 'device locked (RESULT 80)' ;;
+        "") printf 'unknown RESULT' ;;
         *) printf 'RESULT %s' "$1" ;;
     esac
 }
@@ -161,7 +163,7 @@ rotate_log
 log "start"
 write_state running 0
 START=$(/bin/date +%s)
-BEFORE="$(snapshot_count)"
+BEFORE="$(latest_snapshot)"
 
 if [ "$PREVENT_SLEEP" = "true" ]; then
     /usr/bin/caffeinate -i /usr/bin/tmutil startbackup --auto --block
@@ -172,21 +174,31 @@ RC=$?
 
 # Time Machine scrive lo snapshot (e RESULT) qualche secondo dopo la fine del run.
 ATTEMPTS=0
-while [ "$ATTEMPTS" -lt 5 ] && [ "$(snapshot_count)" -le "$BEFORE" ]; do
+AFTER="$(latest_snapshot)"
+while [ "$ATTEMPTS" -lt 5 ]; do
+    [[ "$AFTER" > "$BEFORE" ]] && break
     [ "$RC" -ne 0 ] && break
     /bin/sleep 3
     ATTEMPTS=$((ATTEMPTS + 1))
+    AFTER="$(latest_snapshot)"
 done
 
 END=$(/bin/date +%s)
 DURATION=$((END - START))
 
-if [ "$(snapshot_count)" -gt "$BEFORE" ]; then
+if [[ "$AFTER" > "$BEFORE" ]]; then
     write_state success "$DURATION"
     log "end: success duration=${DURATION}s"
     [ "$DO_NOTIFY" = "true" ] && notify "Backup completed in ${DURATION}s"
 else
-    REASON="$(result_reason "$(backup_result)")"
+    # Time Machine scrive RESULT qualche secondo dopo la fine del run, e la lettura
+    # può fallire mentre la preferenza viene riscritta: un solo ritentativo.
+    RESULT_CODE="$(backup_result)"
+    if [ -z "$RESULT_CODE" ]; then
+        /bin/sleep 5
+        RESULT_CODE="$(backup_result)"
+    fi
+    REASON="$(result_reason "$RESULT_CODE")"
     [ "$RC" -ne 0 ] && REASON="tmutil rc=$RC / $REASON"
     write_state failed "$DURATION"
     log "end: failed $REASON duration=${DURATION}s"
