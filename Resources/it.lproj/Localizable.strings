@@ -14,6 +14,7 @@
 "options.preventSleep" = "Impedisci il sonno durante il backup";
 "options.skipOnBattery" = "Salta se il Mac è a batteria";
 "options.keepAwake" = "Impedisci lo stand-by del Mac";
+"options.limitedBackup" = "Consenti un backup limitato se la sessione è bloccata";
 "options.notify" = "Notifica a fine backup";
 
 "status.lastBackup" = "Ultimo backup";
@@ -64,6 +65,7 @@
 "lastRun.result.unknown" = "esito sconosciuto";
 "lastRun.format" = "%@ · %@";
 "lastRun.minutes" = " · %d min";
+"lastRun.limited" = " · backup limitato (%d percorsi esclusi)";
 "lastRun.seconds" = " · %d s";
 
 "next.disabled" = "Pianificazione disattivata";
@@ -100,6 +102,7 @@
 "help.options.3" = "«Salta se il Mac è a batteria» evita il backup quando il Mac non è collegato alla corrente.";
 "help.options.4" = "«Notifica a fine backup» mostra una notifica di sistema.";
 "help.options.5" = "«Impedisci lo stand-by del Mac» tiene sveglio il Mac finché il servizio è attivo (lo schermo può comunque spegnersi). Serve quando il Mac sarebbe addormentato all'orario pianificato; aprire il coperchio o collegare un display non cambia nulla e un Mac spento non può essere acceso da nessuna pianificazione.";
+"help.options.6" = "«Consenti un backup limitato se la sessione è bloccata» esclude la cartella Library di ogni utente per quella sola esecuzione, così Time Machine chiude invece di fallire sui file protetti. Preferenze e cache di quella notte mancano dal backup; le esclusioni vengono rimosse appena il run finisce e l'ultimo backup risulta limitato.";
 
 "help.backup.title" = "Backup e log";
 "help.backup.1" = "«Backup ora» avvia subito un backup fuori pianificazione.";

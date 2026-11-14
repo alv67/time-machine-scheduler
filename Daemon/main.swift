@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import IOKit.pwr_mgt
 
@@ -97,10 +98,13 @@ private func lastRunDate() -> Date? {
     return (try? decoder.decode(LastRun.self, from: data))?.date
 }
 
-private func spawnRun() -> Process? {
+private func spawnRun(limited: Bool) -> Process? {
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/bin/bash")
     process.arguments = [Paths.script]
+    var environment = ProcessInfo.processInfo.environment
+    environment["TMS_LIMITED"] = limited ? "1" : "0"
+    process.environment = environment
     process.standardOutput = FileHandle.nullDevice
     process.standardError = FileHandle.nullDevice
     do {
@@ -110,6 +114,36 @@ private func spawnRun() -> Process? {
         log("run: cannot start \(Paths.script): \(error.localizedDescription)")
         return nil
     }
+}
+
+private func consoleUID() -> uid_t? {
+    guard let attributes = try? FileManager.default.attributesOfItem(atPath: "/dev/console"),
+          let owner = attributes[.ownerAccountID] as? NSNumber,
+          owner.uint32Value != 0
+    else { return nil }
+    return uid_t(owner.uint32Value)
+}
+
+/// Il daemon di sistema non ha una sessione grafica: lo stato va chiesto dentro quella
+/// dell'utente al console, con lo stesso binario (`--lock-state`). In dubbio: bloccato.
+private func sessionLocked() -> Bool {
+    guard let uid = consoleUID() else { return true }
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+    process.arguments = ["asuser", String(uid), CommandLine.arguments[0], "--lock-state"]
+    let pipe = Pipe()
+    process.standardOutput = pipe
+    process.standardError = FileHandle.nullDevice
+    do {
+        try process.run()
+    } catch {
+        return true
+    }
+    let data = pipe.fileHandleForReading.readDataToEndOfFile()
+    process.waitUntilExit()
+    let output = String(data: data, encoding: .utf8)?
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+    return output != "unlocked"
 }
 
 @discardableResult
@@ -149,6 +183,19 @@ private func armWake(for slot: Date, now: Date, armed: inout String?) {
     armed = stamp
     try? (stamp + "\n").write(toFile: Paths.wakeState, atomically: true, encoding: .utf8)
     log("wake: armed for \(stamp)")
+}
+
+// `--lock-state`: stampa "locked"/"unlocked" per la sessione in cui gira. Va invocato
+// dentro la sessione dell'utente (`launchctl asuser`): da solo il demone non ne ha una.
+if CommandLine.arguments.contains("--lock-state") {
+    guard let session = CGSessionCopyCurrentDictionary() as? [String: Any] else {
+        print("locked")
+        exit(0)
+    }
+    let value = session["CGSSessionScreenIsLocked"]
+    let locked = (value as? Bool) ?? ((value as? NSNumber)?.boolValue ?? false)
+    print(locked ? "locked" : "unlocked")
+    exit(0)
 }
 
 log("daemon start")
@@ -192,9 +239,13 @@ while true {
         if now.timeIntervalSince(lastAttempt) >= dueGrace,
            ScheduleLogic.isDue(at: now, config: config, lastRun: lastRunDate(), grace: dueGrace) {
             lastAttempt = now
+            let limited = config.limitedBackup && sessionLocked()
+            if limited {
+                log("run: session locked, limited backup")
+            }
             log("run: due, starting backup")
             // Il processo va trattenuto: se lo si lascia cadere il figlio viene terminato.
-            if let process = spawnRun() {
+            if let process = spawnRun(limited: limited) {
                 job = process
             }
         }

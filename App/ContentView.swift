@@ -112,6 +112,7 @@ struct ContentView: View {
             Toggle("options.requireDestination", isOn: $model.config.requireDestination)
             Toggle("options.preventSleep", isOn: $model.config.preventSleep)
             Toggle("options.keepAwake", isOn: $model.config.keepAwake)
+            Toggle("options.limitedBackup", isOn: $model.config.limitedBackup)
             Toggle("options.skipOnBattery", isOn: $model.config.skipOnBattery)
             Toggle("options.notify", isOn: $model.config.notify)
         }

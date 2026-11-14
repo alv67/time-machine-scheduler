@@ -73,14 +73,23 @@ struct ScheduleTests {
         """
         let decoded = try! JSONDecoder().decode(ScheduleConfig.self, from: Data(legacy.utf8))
         assert(decoded.keepAwake == false)
+        assert(decoded.limitedBackup == false)
         assert(decoded.hour == 3 && decoded.minute == 30 && decoded.weekdays == [2])
         assert(decoded.requireDestination == false && decoded.skipOnBattery == true)
 
         var roundTrip = decoded
         roundTrip.keepAwake = true
+        roundTrip.limitedBackup = true
         let encoded = try! JSONEncoder().encode(roundTrip)
         let back = try! JSONDecoder().decode(ScheduleConfig.self, from: encoded)
         assert(back == roundTrip)
+
+        // stato del job: limited è opzionale, i last-run.json vecchi restano leggibili
+        let oldRun = Data(#"{"date":"2026-11-14T01:12:36Z","result":"success","durationSeconds":744}"#.utf8)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let run = try! decoder.decode(LastRun.self, from: oldRun)
+        assert(run.limited == nil && run.excluded == nil)
 
         print("ScheduleLogic: tutti i test superati")
     }
