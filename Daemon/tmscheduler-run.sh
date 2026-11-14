@@ -5,14 +5,19 @@ CONF="/Library/Application Support/TMScheduler/config.json"
 LOG="/Library/Application Support/TMScheduler/tmscheduler.log"
 STATE="/Library/Application Support/TMScheduler/last-run.json"
 TM_PLIST="/Library/Preferences/com.apple.TimeMachine.plist"
+TEMP_EXCL="/Library/Application Support/TMScheduler/temporary-exclusions.txt"
 
 log() { printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$LOG"; }
 
 jget() { /usr/bin/plutil -extract "$1" raw -o - "$CONF" 2>/dev/null; }
 
-write_state() { # <result> <durationSeconds>
-    printf '{"date":"%s","result":"%s","durationSeconds":%s}\n' \
-        "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$1" "$2" > "$STATE"
+write_state() { # <result> <durationSeconds> [limited] [excluded]
+    local extra=""
+    if [ "${3:-0}" = "1" ]; then
+        extra=",\"limited\":true,\"excluded\":${4:-0}"
+    fi
+    printf '{"date":"%s","result":"%s","durationSeconds":%s%s}\n' \
+        "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$1" "$2" "$extra" > "$STATE"
 }
 
 rotate_log() {
@@ -159,11 +164,61 @@ result_reason() { # <RESULT>
     esac
 }
 
+# Con la sessione bloccata alcuni file di ~/Library non sono leggibili e Time Machine
+# abbandona il run. Escluderli per questa sola esecuzione è meglio di nessun backup:
+# si perdono preferenze e cache di quella notte, non i documenti.
+limited_paths() {
+    local home uid
+    for home in /Users/*; do
+        case "$home" in
+            */Shared) continue ;;
+        esac
+        [ -d "$home/Library" ] || continue
+        uid="$(/usr/bin/stat -f '%u' "$home" 2>/dev/null || echo 0)"
+        [ "$uid" -ge 501 ] || continue
+        printf '%s\n' "$home/Library"
+    done
+}
+
+restore_exclusions() { # <file>
+    local path
+    [ -f "$1" ] || return 0
+    while IFS= read -r path; do
+        [ -n "$path" ] || continue
+        /usr/bin/tmutil removeexclusion -p "$path" >/dev/null 2>&1 || true
+    done < "$1"
+    /bin/rm -f "$1"
+}
+
+# Un run interrotto prima del ripristino lascerebbe esclusioni permanenti: si ripuliscono
+# all'inizio di ogni esecuzione.
+if [ -f "$TEMP_EXCL" ]; then
+    restore_exclusions "$TEMP_EXCL"
+    log "recovered: temporary exclusions removed"
+fi
+
 rotate_log
 log "start"
 write_state running 0
 START=$(/bin/date +%s)
 BEFORE="$(latest_snapshot)"
+
+LIMITED=0
+EXCLUDED=0
+if [ "${TMS_LIMITED:-0}" = "1" ]; then
+    : > "$TEMP_EXCL"
+    while IFS= read -r path; do
+        if /usr/bin/tmutil isexcluded "$path" 2>/dev/null | /usr/bin/grep -q "\[Excluded\]"; then
+            continue
+        fi
+        if /usr/bin/tmutil addexclusion -p "$path" >/dev/null 2>&1; then
+            printf '%s\n' "$path" >> "$TEMP_EXCL"
+            EXCLUDED=$((EXCLUDED + 1))
+        fi
+    done < <(limited_paths)
+    LIMITED=1
+    log "limited: $EXCLUDED paths excluded for this run"
+fi
 
 if [ "$PREVENT_SLEEP" = "true" ]; then
     /usr/bin/caffeinate -i /usr/bin/tmutil startbackup --auto --block
@@ -171,6 +226,11 @@ else
     /usr/bin/tmutil startbackup --auto --block
 fi
 RC=$?
+
+if [ "$LIMITED" = "1" ]; then
+    restore_exclusions "$TEMP_EXCL"
+    log "limited: exclusions restored"
+fi
 
 # Time Machine scrive lo snapshot (e RESULT) qualche secondo dopo la fine del run.
 ATTEMPTS=0
@@ -187,9 +247,14 @@ END=$(/bin/date +%s)
 DURATION=$((END - START))
 
 if [[ "$AFTER" > "$BEFORE" ]]; then
-    write_state success "$DURATION"
-    log "end: success duration=${DURATION}s"
-    [ "$DO_NOTIFY" = "true" ] && notify "Backup completed in ${DURATION}s"
+    write_state success "$DURATION" "$LIMITED" "$EXCLUDED"
+    if [ "$LIMITED" = "1" ]; then
+        log "end: success duration=${DURATION}s (limited: $EXCLUDED paths)"
+        [ "$DO_NOTIFY" = "true" ] && notify "Limited backup completed: $EXCLUDED paths excluded"
+    else
+        log "end: success duration=${DURATION}s"
+        [ "$DO_NOTIFY" = "true" ] && notify "Backup completed in ${DURATION}s"
+    fi
 else
     # Time Machine scrive RESULT qualche secondo dopo la fine del run, e la lettura
     # può fallire mentre la preferenza viene riscritta: un solo ritentativo.
@@ -200,7 +265,7 @@ else
     fi
     REASON="$(result_reason "$RESULT_CODE")"
     [ "$RC" -ne 0 ] && REASON="tmutil rc=$RC / $REASON"
-    write_state failed "$DURATION"
+    write_state failed "$DURATION" "$LIMITED" "$EXCLUDED"
     log "end: failed $REASON duration=${DURATION}s"
     [ "$DO_NOTIFY" = "true" ] && notify "Backup failed: $REASON"
 fi

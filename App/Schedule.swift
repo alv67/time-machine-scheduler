@@ -5,6 +5,9 @@ struct LastRun: Codable, Equatable {
     var date: Date
     var result: String
     var durationSeconds: Int?
+    /// Vero quando il backup è stato fatto con percorsi esclusi perché inaccessibili.
+    var limited: Bool?
+    var excluded: Int?
 }
 
 /// Configurazione scritta dall'app e letta dal daemon.
@@ -21,6 +24,9 @@ struct ScheduleConfig: Codable, Equatable {
     /// Impedisce lo stand-by mentre il servizio è attivo: con uno sleep breve il Mac
     /// sarebbe addormentato all'orario pianificato.
     var keepAwake = false
+    /// Se la sessione è bloccata, esclude temporaneamente `~/Library` di ogni utente
+    /// invece di far fallire il backup.
+    var limitedBackup = false
     var version = 1
 
     init() {}
@@ -38,6 +44,7 @@ struct ScheduleConfig: Codable, Equatable {
         skipOnBattery = try values.decodeIfPresent(Bool.self, forKey: .skipOnBattery) ?? defaults.skipOnBattery
         notify = try values.decodeIfPresent(Bool.self, forKey: .notify) ?? defaults.notify
         keepAwake = try values.decodeIfPresent(Bool.self, forKey: .keepAwake) ?? defaults.keepAwake
+        limitedBackup = try values.decodeIfPresent(Bool.self, forKey: .limitedBackup) ?? defaults.limitedBackup
         version = try values.decodeIfPresent(Int.self, forKey: .version) ?? defaults.version
     }
 }
@@ -50,6 +57,8 @@ enum Paths {
     static let log = supportDir + "/tmscheduler.log"
     /// Data del risveglio armato con pmset, per poterlo annullare alla disinstallazione.
     static let wakeState = supportDir + "/wake"
+    /// Percorsi esclusi temporaneamente per l'ultimo run: se resta, va ripulito all'avvio.
+    static let temporaryExclusions = supportDir + "/temporary-exclusions.txt"
     static let daemon = "/usr/local/bin/tmscheduler-daemon"
     /// Esegue il backup singolo su richiesta del daemon (nessuna schedulazione qui).
     static let script = "/usr/local/bin/tmscheduler-run"

@@ -14,6 +14,7 @@
 "options.preventSleep" = "Prevent sleep during backup";
 "options.skipOnBattery" = "Skip when the Mac is on battery";
 "options.keepAwake" = "Prevent the Mac from going to sleep";
+"options.limitedBackup" = "Allow a limited backup when the session is locked";
 "options.notify" = "Notify when backup ends";
 
 "status.lastBackup" = "Last backup";
@@ -64,6 +65,7 @@
 "lastRun.result.unknown" = "unknown result";
 "lastRun.format" = "%@ · %@";
 "lastRun.minutes" = " · %d min";
+"lastRun.limited" = " · limited backup (%d paths excluded)";
 "lastRun.seconds" = " · %d s";
 
 "next.disabled" = "Schedule disabled";
@@ -100,6 +102,7 @@
 "help.options.3" = "“Skip when the Mac is on battery” avoids backups while the Mac is not connected to power.";
 "help.options.4" = "“Notify when backup ends” shows a system notification.";
 "help.options.5" = "“Prevent the Mac from going to sleep” keeps the Mac awake while the service is active (the display can still sleep). Use it when the Mac would otherwise be asleep at the scheduled time; opening the lid or an external display changes nothing, a Mac that is off cannot be woken by any schedule.";
+"help.options.6" = "“Allow a limited backup when the session is locked” excludes every account’s Library folder for that single run, so Time Machine can finish instead of failing on protected files. Preferences and caches of that night are missing from the backup; the exclusions are removed as soon as the run ends, and the last backup is marked as limited.";
 
 "help.backup.title" = "Backup and log";
 "help.backup.1" = "“Back up now” starts a backup immediately, outside the schedule.";

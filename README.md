@@ -39,6 +39,7 @@ installed with `osascript` and admin privileges (approach A).
 - **Your destination** — reads the destination configured in Time Machine, local or network, and checks that it is reachable.
 - **No surprises** — skips on battery, prevents sleep during the backup and notifies you when it ends.
 - **No standby** — optional: the daemon keeps the Mac awake so the scheduled time is not missed, while the display can still sleep.
+- **Limited backup** — optional: when the session is locked, the accounts' Library folders are excluded for that run only, so the backup completes instead of failing; the run is marked as limited.
 - **Status and logs** — phase, percentage, last backup and a readable log with automatic rotation.
 - **Back up now** — start a backup outside the schedule without waiting for the next run.
 - **Clean restore** — removes daemon, script and logs and puts Time Machine back on the frequency you choose.
@@ -176,6 +177,9 @@ Help and About.
   logged in, still does; a missed run is logged and notified when the Mac wakes.
 - A backup skipped because the Mac was off or asleep is not caught up later; the
   next one runs at the next scheduled time.
+- A limited backup is missing every account's `Library` folder for that night
+  (preferences, caches, app containers). The files come back with the next complete
+  run, but a restore from that snapshot does not have them.
 - "Prevent the Mac from going to sleep" keeps the Mac awake for as long as the
   service is active: more power and heat, and the battery drains on battery
   power. The display can still sleep. A Mac with the lid closed and no external
@@ -247,6 +251,10 @@ is updated.
       scheduled run completes: `end: success` and a newer entry in `SnapshotDates`.
 - [ ] With the session locked (Ctrl+Cmd+Q), the same run ends
       `failed device locked (RESULT 80)` — the limitation is macOS, not the app.
+- [ ] `sudo TMS_LIMITED=1 /usr/local/bin/tmscheduler-run` forces a limited run: the
+      log records `limited: N paths excluded for this run`, `tmutil isexcluded`
+      shows them during the run, they are restored at the end, and `last-run.json`
+      carries `"limited":true`.
 - [ ] Set the scheduled time a couple of minutes ahead with the app open: the log
       records `run: due, starting backup`, then `start` and `end: success`.
 - [ ] With the Time Machine destination off or unreachable, the daemon writes
@@ -294,6 +302,16 @@ daemon does one job:
    window, runs `tmscheduler-run`;
 4. if it notices it slept over the scheduled time, it logs
    `missed: Mac asleep at HH:MM` and notifies.
+
+**Limited backup** (opt-in): if the session is locked at the scheduled time and the
+option is on, the job excludes `~/Library` of every real account for the duration of
+the run (`tmutil addexclusion -p`) and removes exactly those exclusions right after
+(`tmutil removeexclusion -p`). Only paths the job added are removed, so the user's
+own exclusions are untouched. The added paths are written to
+`/Library/Application Support/TMScheduler/temporary-exclusions.txt` **before**
+touching Time Machine, and a leftover file is cleaned at the start of the next run:
+a crash cannot leave permanent exclusions. The run is recorded as
+`success` with `"limited": true` and the number of paths.
 
 `tmutil startbackup --block` exits 0 even when the backup fails, so the result is
 decided by the **newest** entry in `SnapshotDates` for the active destination in
