@@ -174,7 +174,7 @@ Help and About.
   with that account at the console Time Machine logs `Device unlocked: true` and
   completes the backup.
 - If nobody is logged in at the scheduled time the run is skipped
-  (`skip: no user logged in`) and notified at the next login, instead of wasting
+  (`skip: no user at the console`) and notified at the next login, instead of wasting
   minutes of copying on a backup that cannot be published.
 - A wake is armed two minutes before the scheduled time (`pmset schedule wake`), so
   an idle sleep does not lose the run. A powered-off Mac, or a reboot with nobody
@@ -252,7 +252,7 @@ is updated.
       scheduled run completes: `end: success` and a newer entry in `SnapshotDates`.
 - [ ] With the session locked (Ctrl+Cmd+Q), the same run ends
       `failed device locked (RESULT 80)` — the limitation is macOS, not the app.
-- [ ] Logged out at the scheduled time: the log records `skip: no user logged in`,
+- [ ] At the login window (no session at the console, even with users left logged in in the background): the log records `skip: no user at the console`,
       no backup starts, and the notification arrives at the next login.
 - [ ] Set the scheduled time a couple of minutes ahead with the app open: the log
       records `run: due, starting backup`, then `start` and `end: success`.
@@ -309,7 +309,7 @@ Then the daemon does one job:
    window, runs `tmscheduler-run`;
 4. if it notices it slept over the scheduled time, it logs
    `missed: Mac asleep at HH:MM` and notifies;
-5. if nobody is logged in at the scheduled time it logs `skip: no user logged in`,
+5. if no session is at the console at the scheduled time it logs `skip: no user at the console`,
    does not start the run, and notifies at the next login.
 
 `tmutil startbackup --block` exits 0 even when the backup fails, so the result is
