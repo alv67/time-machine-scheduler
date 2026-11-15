@@ -151,11 +151,21 @@ private func armWake(for slot: Date, now: Date, armed: inout String?) {
     log("wake: armed for \(stamp)")
 }
 
+/// Utente al console, o nil quando la macchina è alla pagina di login.
+private func consoleUID() -> uid_t? {
+    guard let attributes = try? FileManager.default.attributesOfItem(atPath: "/dev/console"),
+          let owner = attributes[.ownerAccountID] as? NSNumber,
+          owner.uint32Value != 0
+    else { return nil }
+    return uid_t(owner.uint32Value)
+}
+
 log("daemon start")
 
 var config = loadConfig() ?? ScheduleConfig()
 var lastTick = Date()
 var lastAttempt = Date.distantPast
+var pendingSkip: Date?
 var armedWake: String?
 var job: Process?
 
@@ -183,6 +193,15 @@ while true {
     }
     lastTick = now
 
+    // Il run saltato per assenza di sessione si annuncia quando qualcuno rientra:
+    // alle 02:00 non c'è nessuno che possa vedere la notifica.
+    if let skipped = pendingSkip, consoleUID() != nil {
+        pendingSkip = nil
+        let time = clockFormatter.string(from: skipped)
+        log("notify: run skipped at \(time), no user was logged in")
+        notify("Backup skipped at \(time): no user was logged in")
+    }
+
     if let next = ScheduleLogic.nextRun(after: now, config: config) {
         armWake(for: next, now: now, armed: &armedWake)
     }
@@ -192,10 +211,17 @@ while true {
         if now.timeIntervalSince(lastAttempt) >= dueGrace,
            ScheduleLogic.isDue(at: now, config: config, lastRun: lastRunDate(), grace: dueGrace) {
             lastAttempt = now
-            log("run: due, starting backup")
-            // Il processo va trattenuto: se lo si lascia cadere il figlio viene terminato.
-            if let process = spawnRun() {
-                job = process
+            if consoleUID() == nil {
+                // Senza utente loggato Time Machine fallisce sempre (RESULT 80) dopo
+                // minuti di copia: meglio non avviarlo e dirlo.
+                log("skip: no user logged in")
+                pendingSkip = now
+            } else {
+                log("run: due, starting backup")
+                // Il processo va trattenuto: se lo si lascia cadere il figlio viene terminato.
+                if let process = spawnRun() {
+                    job = process
+                }
             }
         }
     }

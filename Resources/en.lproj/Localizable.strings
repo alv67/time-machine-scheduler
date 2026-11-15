@@ -114,5 +114,6 @@
 "help.limits.3" = "The app window can be closed: the daemon keeps running.";
 "help.limits.4" = "At the scheduled time the Mac must be awake and the session unlocked: with the device locked Time Machine cannot read some files of every account. The display can be off, the session cannot be locked.";
 "help.limits.5" = "If the Mac is off or asleep at the scheduled time the backup is not caught up on wake: it waits for the next scheduled time.";
+"help.limits.6" = "If nobody is logged in at the scheduled time, the backup is skipped and reported at the next login.";
 
 "help.github" = "Project GitHub page";
