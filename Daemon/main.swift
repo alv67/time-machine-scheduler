@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import IOKit.pwr_mgt
 
@@ -151,13 +152,51 @@ private func armWake(for slot: Date, now: Date, armed: inout String?) {
     log("wake: armed for \(stamp)")
 }
 
-/// Utente al console, o nil quando la macchina è alla pagina di login.
+/// Utente al console, o nil quando /dev/console non appartiene a nessuno.
 private func consoleUID() -> uid_t? {
     guard let attributes = try? FileManager.default.attributesOfItem(atPath: "/dev/console"),
           let owner = attributes[.ownerAccountID] as? NSNumber,
           owner.uint32Value != 0
     else { return nil }
     return uid_t(owner.uint32Value)
+}
+
+/// Possedere `/dev/console` non basta: a pagina di login il device node può restare
+/// intestato a un utente loggato in background. Lo stato vero lo sa solo la sessione,
+/// quindi lo si chiede dentro di essa con lo stesso binario (`--session-state`).
+private func userAtConsole() -> Bool {
+    guard let uid = consoleUID() else { return false }
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+    process.arguments = ["asuser", String(uid), CommandLine.arguments[0], "--session-state"]
+    process.standardInput = FileHandle.nullDevice
+    process.standardError = FileHandle.nullDevice
+    let pipe = Pipe()
+    process.standardOutput = pipe
+    do {
+        try process.run()
+    } catch {
+        return false
+    }
+    let data = pipe.fileHandleForReading.readDataToEndOfFile()
+    process.waitUntilExit()
+    let output = String(data: data, encoding: .utf8) ?? ""
+    return output.contains("onconsole=1")
+}
+
+// `--session-state`: stampa lo stato della sessione in cui gira. Va invocato dentro la
+// sessione dell'utente (`launchctl asuser`): un demone di sistema non ne ha una.
+if CommandLine.arguments.contains("--session-state") {
+    guard let session = CGSessionCopyCurrentDictionary() as? [String: Any] else {
+        print("onconsole=0 locked=1")
+        exit(0)
+    }
+    let onConsole = (session["kCGSSessionOnConsoleKey"] as? Bool)
+        ?? ((session["kCGSSessionOnConsoleKey"] as? NSNumber)?.boolValue ?? false)
+    let locked = (session["CGSSessionScreenIsLocked"] as? Bool)
+        ?? ((session["CGSSessionScreenIsLocked"] as? NSNumber)?.boolValue ?? false)
+    print("onconsole=\(onConsole ? 1 : 0) locked=\(locked ? 1 : 0)")
+    exit(0)
 }
 
 log("daemon start")
@@ -195,7 +234,7 @@ while true {
 
     // Il run saltato per assenza di sessione si annuncia quando qualcuno rientra:
     // alle 02:00 non c'è nessuno che possa vedere la notifica.
-    if let skipped = pendingSkip, consoleUID() != nil {
+    if let skipped = pendingSkip, userAtConsole() {
         pendingSkip = nil
         let time = clockFormatter.string(from: skipped)
         log("notify: run skipped at \(time), no user was logged in")
@@ -211,10 +250,10 @@ while true {
         if now.timeIntervalSince(lastAttempt) >= dueGrace,
            ScheduleLogic.isDue(at: now, config: config, lastRun: lastRunDate(), grace: dueGrace) {
             lastAttempt = now
-            if consoleUID() == nil {
-                // Senza utente loggato Time Machine fallisce sempre (RESULT 80) dopo
-                // minuti di copia: meglio non avviarlo e dirlo.
-                log("skip: no user logged in")
+            if !userAtConsole() {
+                // A pagina di login Time Machine fallisce sempre (RESULT 80) dopo minuti
+                // di copia: meglio non avviarlo e dirlo.
+                log("skip: no user at the console")
                 pendingSkip = now
             } else {
                 log("run: due, starting backup")
