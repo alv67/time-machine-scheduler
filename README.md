@@ -162,15 +162,20 @@ Help and About.
 - arm64 only: Intel Macs are not supported in this release.
 - Mac asleep with the lid closed: `caffeinate` does not prevent that kind of sleep;
   the job may start late or be unreliable.
-- The Mac must be **awake and unlocked** at the scheduled time. Time Machine cannot
-  read file-protection class A data (some caches and preferences of every account)
-  while the device is locked, and there is no supported way around it: an assertion
-  taken by a third-party process has no effect (verified on macOS 27.2), and SSH
-  does not unlock the device either. With "Require password after screen saver
-  begins or display is turned off" set to a delay longer than the night (or off),
-  the display can sleep while the session stays unlocked: the backup then runs with
-  the screen off. Trade-off: anyone at the keyboard before the lock kicks in has
-  the session.
+- The Mac must be **awake**, with an **unlocked session at the console** at the
+  scheduled time. Time Machine cannot read file-protection class A data (some caches
+  and preferences of every account) while the device is locked: a locked console
+  session makes the run abort with `BACKUP_FAILED_DEVICE_LOCKED` (RESULT 80), and
+  after a logout it always does. Verified on macOS 27.2: an assertion taken by a
+  third-party process has no effect, SSH does not unlock the device, and excluding
+  the protected paths does not help either.
+- The account at the console does not have to be yours: an empty standard account
+  left logged in and unlocked works, so your own session can stay locked. Verified:
+  with that account at the console Time Machine logs `Device unlocked: true` and
+  completes the backup.
+- If nobody is logged in at the scheduled time the run is skipped
+  (`skip: no user logged in`) and notified at the next login, instead of wasting
+  minutes of copying on a backup that cannot be published.
 - A wake is armed two minutes before the scheduled time (`pmset schedule wake`), so
   an idle sleep does not lose the run. A powered-off Mac, or a reboot with nobody
   logged in, still does; a missed run is logged and notified when the Mac wakes.
@@ -247,6 +252,8 @@ is updated.
       scheduled run completes: `end: success` and a newer entry in `SnapshotDates`.
 - [ ] With the session locked (Ctrl+Cmd+Q), the same run ends
       `failed device locked (RESULT 80)` — the limitation is macOS, not the app.
+- [ ] Logged out at the scheduled time: the log records `skip: no user logged in`,
+      no backup starts, and the notification arrives at the next login.
 - [ ] Set the scheduled time a couple of minutes ahead with the app open: the log
       records `run: due, starting backup`, then `start` and `end: success`.
 - [ ] With the Time Machine destination off or unreachable, the daemon writes
@@ -281,10 +288,18 @@ macOS has no supported way for another process to unlock it:
   same failure;
 - auto-login works only at boot and leaves the password on disk.
 
-What works is keeping the display off and the **session unlocked**: System Settings
-→ Lock Screen → "Require password after screen saver begins or display is turned
-off" → a delay longer than the night (or Never; it is a per-user setting). Then the
-daemon does one job:
+What works is having an **unlocked session at the console** at the scheduled time.
+Two ways to get there:
+
+- leave your own session unlocked, with "Require password after screen saver begins
+  or display is turned off" set to a delay longer than the night (or Never — it is a
+  per-user setting), so the display can sleep while the session stays unlocked;
+- or keep your session locked and leave an **empty standard account** logged in and
+  unlocked at the console: the device counts as unlocked, Time Machine reads
+  everything, and whoever sits at the Mac finds an account with no data and no admin
+  rights. Verified with `Device unlocked: true` and a published snapshot.
+
+Then the daemon does one job:
 
 1. while the option is on it holds an `IOPMAssertion`, so the Mac does not sleep;
 2. two minutes before the scheduled time it arms a wake with
@@ -293,7 +308,9 @@ daemon does one job:
 3. every 10 seconds it compares the clock with `config.json` and, inside a 60 s
    window, runs `tmscheduler-run`;
 4. if it notices it slept over the scheduled time, it logs
-   `missed: Mac asleep at HH:MM` and notifies.
+   `missed: Mac asleep at HH:MM` and notifies;
+5. if nobody is logged in at the scheduled time it logs `skip: no user logged in`,
+   does not start the run, and notifies at the next login.
 
 `tmutil startbackup --block` exits 0 even when the backup fails, so the result is
 decided by the **newest** entry in `SnapshotDates` for the active destination in

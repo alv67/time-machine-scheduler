@@ -172,15 +172,15 @@ else
 fi
 RC=$?
 
-# Time Machine riscrive le preferenze alla fine del run: per qualche secondo le
-# letture possono tornare vuote, e non vanno scambiate per "nessuno snapshot".
+# Time Machine riscrive le preferenze alla fine del run: per un po' le letture possono
+# tornare vuote o vecchie. Si riprova per un paio di minuti, e in caso di fallimento si
+# scrivono i valori letti: senza quelli si finisce a indovinare.
 ATTEMPTS=0
 AFTER=""
-while [ "$ATTEMPTS" -lt 8 ]; do
+while [ "$ATTEMPTS" -lt 18 ]; do
     AFTER="$(latest_snapshot)"
     [ -n "$AFTER" ] && [[ "$AFTER" > "$BEFORE" ]] && break
-    [ "$RC" -ne 0 ] && break
-    /bin/sleep 4
+    /bin/sleep 10
     ATTEMPTS=$((ATTEMPTS + 1))
 done
 
@@ -202,6 +202,6 @@ else
     REASON="$(result_reason "$RESULT_CODE")"
     [ "$RC" -ne 0 ] && REASON="tmutil rc=$RC / $REASON"
     write_state failed "$DURATION"
-    log "end: failed $REASON duration=${DURATION}s"
+    log "end: failed $REASON duration=${DURATION}s (snapshot before='$BEFORE' after='$AFTER')"
     [ "$DO_NOTIFY" = "true" ] && notify "Backup failed: $REASON"
 fi
