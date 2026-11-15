@@ -162,9 +162,30 @@ result_reason() { # <RESULT>
 rotate_log
 log "start"
 write_state running 0
-# Time Machine riscrive le preferenze alla fine (e durante) il run: le letture possono
-# tornare vuote. L'esito non si decide confrontando "prima" e "dopo", ma guardando se
-# esiste uno snapshot più recente dell'inizio del run.
+# L'esito si legge dalla destinazione, come fa backupd: il nome dell'ultimo backup
+# contiene data e ora locali (YYYY-MM-DD-HHMMSS) e non dipende dalle preferenze di
+# Time Machine, che durante il run vengono riscritte e risultano illeggibili.
+latest_backup_epoch() {
+    local name
+    name="$(/usr/bin/tmutil latestbackup 2>/dev/null \
+        | /usr/bin/sed -n 's#.*/\([0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}-[0-9]\{6\}\)\.backup.*#\1#p' \
+        | /usr/bin/tail -1)"
+    [ -n "$name" ] || return 1
+    /bin/date -j -f "%Y-%m-%d-%H%M%S" "$name" +%s 2>/dev/null
+}
+
+# Ripiego: la data più recente dalle preferenze, letta come UTC.
+snapshot_epoch() {
+    local date_str
+    date_str="$(latest_snapshot)"
+    [ -n "$date_str" ] || return 1
+    TZ=UTC /bin/date -j -f "%Y-%m-%dT%H:%M:%SZ" "$date_str" +%s 2>/dev/null
+}
+
+outcome_epoch() {
+    latest_backup_epoch || snapshot_epoch
+}
+
 START=$(/bin/date +%s)
 BEFORE="$(latest_snapshot)"
 
@@ -181,12 +202,12 @@ RC=$?
 ATTEMPTS=0
 AFTER=""
 AFTER_EPOCH=0
+# Due minuti di tolleranza: se il backup è di questo run, il nome cade nella finestra.
+SUCCESS_FROM=$((START - 120))
 while [ "$ATTEMPTS" -lt 18 ]; do
     AFTER="$(latest_snapshot)"
-    if [ -n "$AFTER" ]; then
-        AFTER_EPOCH="$(TZ=UTC /bin/date -j -f "%Y-%m-%dT%H:%M:%SZ" "$AFTER" +%s 2>/dev/null || echo 0)"
-        [ "${AFTER_EPOCH:-0}" -ge "$START" ] && break
-    fi
+    AFTER_EPOCH="$(outcome_epoch || echo 0)"
+    [ "${AFTER_EPOCH:-0}" -ge "$SUCCESS_FROM" ] && break
     /bin/sleep 10
     ATTEMPTS=$((ATTEMPTS + 1))
 done
@@ -194,7 +215,7 @@ done
 END=$(/bin/date +%s)
 DURATION=$((END - START))
 
-if [ "${AFTER_EPOCH:-0}" -ge "$START" ]; then
+if [ "${AFTER_EPOCH:-0}" -ge "$SUCCESS_FROM" ]; then
     write_state success "$DURATION"
     log "end: success duration=${DURATION}s"
     [ "$DO_NOTIFY" = "true" ] && notify "Backup completed in ${DURATION}s"
