@@ -10,7 +10,7 @@ A macOS app to run Time Machine backups on specific days and times, instead of
 relying on the interval anchored to the last completed backup.
 
 [![Download DMG](https://img.shields.io/badge/download-DMG-blue?style=flat-square)](https://github.com/alv67/time-machine-scheduler/releases/latest)
-[![Version](https://img.shields.io/badge/version-0.1.0-blue?style=flat-square)](https://github.com/alv67/time-machine-scheduler/releases)
+[![Version](https://img.shields.io/badge/version-0.2.0--rc1-blue?style=flat-square)](https://github.com/alv67/time-machine-scheduler/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
 
 [![macOS 14+](https://img.shields.io/badge/macOS-14%2B-000000?logo=apple&logoColor=white&style=flat-square)](https://www.apple.com/macos/)
@@ -100,7 +100,7 @@ Bonjour names such as `*.local`) before starting the backup.
 make test     # checks scheduling logic and plist generation
 make app      # builds build/TimeMachineScheduler.app
 make run      # opens the app
-make dmg      # builds build/TimeMachineScheduler-0.1.0.dmg
+make dmg      # builds build/TimeMachineScheduler-0.2.0-rc1.dmg
 make release  # builds DMG, ZIP and SHA256SUMS.txt
 make install  # copies to /Applications and removes the quarantine flag
 ```
