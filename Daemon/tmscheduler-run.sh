@@ -162,6 +162,9 @@ result_reason() { # <RESULT>
 rotate_log
 log "start"
 write_state running 0
+# Time Machine riscrive le preferenze alla fine (e durante) il run: le letture possono
+# tornare vuote. L'esito non si decide confrontando "prima" e "dopo", ma guardando se
+# esiste uno snapshot più recente dell'inizio del run.
 START=$(/bin/date +%s)
 BEFORE="$(latest_snapshot)"
 
@@ -177,9 +180,13 @@ RC=$?
 # scrivono i valori letti: senza quelli si finisce a indovinare.
 ATTEMPTS=0
 AFTER=""
+AFTER_EPOCH=0
 while [ "$ATTEMPTS" -lt 18 ]; do
     AFTER="$(latest_snapshot)"
-    [ -n "$AFTER" ] && [[ "$AFTER" > "$BEFORE" ]] && break
+    if [ -n "$AFTER" ]; then
+        AFTER_EPOCH="$(TZ=UTC /bin/date -j -f "%Y-%m-%dT%H:%M:%SZ" "$AFTER" +%s 2>/dev/null || echo 0)"
+        [ "${AFTER_EPOCH:-0}" -ge "$START" ] && break
+    fi
     /bin/sleep 10
     ATTEMPTS=$((ATTEMPTS + 1))
 done
@@ -187,7 +194,7 @@ done
 END=$(/bin/date +%s)
 DURATION=$((END - START))
 
-if [[ "$AFTER" > "$BEFORE" ]]; then
+if [ "${AFTER_EPOCH:-0}" -ge "$START" ]; then
     write_state success "$DURATION"
     log "end: success duration=${DURATION}s"
     [ "$DO_NOTIFY" = "true" ] && notify "Backup completed in ${DURATION}s"
