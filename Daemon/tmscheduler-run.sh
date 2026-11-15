@@ -172,15 +172,16 @@ else
 fi
 RC=$?
 
-# Time Machine scrive lo snapshot (e RESULT) qualche secondo dopo la fine del run.
+# Time Machine riscrive le preferenze alla fine del run: per qualche secondo le
+# letture possono tornare vuote, e non vanno scambiate per "nessuno snapshot".
 ATTEMPTS=0
-AFTER="$(latest_snapshot)"
-while [ "$ATTEMPTS" -lt 5 ]; do
-    [[ "$AFTER" > "$BEFORE" ]] && break
-    [ "$RC" -ne 0 ] && break
-    /bin/sleep 3
-    ATTEMPTS=$((ATTEMPTS + 1))
+AFTER=""
+while [ "$ATTEMPTS" -lt 8 ]; do
     AFTER="$(latest_snapshot)"
+    [ -n "$AFTER" ] && [[ "$AFTER" > "$BEFORE" ]] && break
+    [ "$RC" -ne 0 ] && break
+    /bin/sleep 4
+    ATTEMPTS=$((ATTEMPTS + 1))
 done
 
 END=$(/bin/date +%s)
