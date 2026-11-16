@@ -282,72 +282,96 @@ outcome_epoch() {
     latest_backup_epoch || snapshot_epoch
 }
 
-START=$(/bin/date +%s)
-RUN_START="$(/bin/date -r "$START" '+%Y-%m-%d %H:%M:%S')"
-BEFORE="$(latest_snapshot)"
+# Stato della sessione: sbloccata non esclude niente; bloccata applica le esclusioni
+# imparate; nessuna sessione (pagina di login) non arriva nemmeno qui, il daemon salta.
+session_state() {
+    local uid state
+    uid="$(/usr/bin/stat -f %u /dev/console 2>/dev/null || echo 0)"
+    [ "$uid" = "0" ] && { echo "none"; return; }
+    state="$(/bin/launchctl asuser "$uid" /usr/local/bin/tmscheduler-daemon --session-state 2>/dev/null)"
+    case "$state" in
+        *locked=1*) echo "locked" ;;
+        *onconsole=1*) echo "unlocked" ;;
+        *) echo "none" ;;
+    esac
+}
 
-# Esclusioni imparate: si applicano solo per questo run e si tolgono subito dopo.
-EXCLUDED=0
-if [ "$LEARNED_ENABLED" = "true" ] && [ -s "$LEARNED_EXCL" ]; then
-    apply_learned_exclusions
-fi
-# Due minuti di tolleranza: se il backup è di questo run, il nome cade nella finestra.
-SUCCESS_FROM=$((START - 120))
-
-# Il successo si riconosce mentre il run è in corso, appena il backup compare: alla fine
-# la destinazione viene smontata e né latestbackup né le preferenze sono leggibili.
-if [ "$PREVENT_SLEEP" = "true" ]; then
-    /usr/bin/caffeinate -i /usr/bin/tmutil startbackup --auto --block &
-else
-    /usr/bin/tmutil startbackup --auto --block &
-fi
-BACKUP_PID=$!
-
-SUCCESS=0
-while kill -0 "$BACKUP_PID" 2>/dev/null; do
-    if [ "$SUCCESS" = "0" ]; then
-        FOUND="$(outcome_epoch || true)"
-        if [ -n "$FOUND" ] && [ "$FOUND" -ge "$SUCCESS_FROM" ]; then
-            SUCCESS=1
-        fi
-    fi
-    /bin/sleep 10
-done
-wait "$BACKUP_PID"
-RC=$?
-
-if [ -f "$TEMP_EXCL" ]; then
-    restore_exclusions "$TEMP_EXCL"
-    log "exclusions: restored"
-fi
-
-# Riprova finale, per il caso in cui il backup compaia solo alla chiusura.
-ATTEMPTS=0
-AFTER=""
-AFTER_EPOCH=0
-while [ "$ATTEMPTS" -lt 18 ] && [ "$SUCCESS" = "0" ]; do
-    AFTER="$(latest_snapshot)"
-    AFTER_EPOCH="$(outcome_epoch || echo 0)"
-    [ "${AFTER_EPOCH:-0}" -ge "$SUCCESS_FROM" ] && break
-    /bin/sleep 10
-    ATTEMPTS=$((ATTEMPTS + 1))
-done
-
-END=$(/bin/date +%s)
-DURATION=$((END - START))
-
-if [ "$SUCCESS" = "1" ] || [ "${AFTER_EPOCH:-0}" -ge "$SUCCESS_FROM" ]; then
-    write_state success "$DURATION" "$EXCLUDED"
-    if [ "$EXCLUDED" -gt 0 ]; then
-        log "end: success duration=${DURATION}s (limited: $EXCLUDED exclusions)"
-        [ "$DO_NOTIFY" = "true" ] && notify "Limited backup completed ($EXCLUDED excluded paths)"
+# Un tentativo di backup. Aggiorna ATTEMPT_OK, RC, DURATION, AFTER, AFTER_EPOCH e
+# gli estremi della finestra usata per riconoscere il successo.
+attempt_backup() {
+    local start before success_from found pid tries
+    start=$(/bin/date +%s)
+    ATTEMPT_START="$(/bin/date -r "$start" '+%Y-%m-%d %H:%M:%S')"
+    before="$(latest_snapshot)"
+    success_from=$((start - 120))
+    # Il successo si riconosce mentre il run è in corso, appena il backup compare: alla
+    # fine la destinazione viene smontata e le letture non sono più affidabili.
+    if [ "$PREVENT_SLEEP" = "true" ]; then
+        /usr/bin/caffeinate -i /usr/bin/tmutil startbackup --auto --block &
     else
-        log "end: success duration=${DURATION}s"
-        [ "$DO_NOTIFY" = "true" ] && notify "Backup completed in ${DURATION}s"
+        /usr/bin/tmutil startbackup --auto --block &
     fi
-else
-    # Time Machine scrive RESULT qualche secondo dopo la fine del run, e la lettura
-    # può fallire mentre la preferenza viene riscritta: un solo ritentativo.
+    pid=$!
+    ATTEMPT_OK=0
+    while kill -0 "$pid" 2>/dev/null; do
+        if [ "$ATTEMPT_OK" = "0" ]; then
+            found="$(outcome_epoch || true)"
+            if [ -n "$found" ] && [ "$found" -ge "$success_from" ]; then
+                ATTEMPT_OK=1
+            fi
+        fi
+        /bin/sleep 10
+    done
+    wait "$pid"
+    RC=$?
+    AFTER=""
+    AFTER_EPOCH=0
+    tries=0
+    while [ "$tries" -lt 18 ] && [ "$ATTEMPT_OK" = "0" ]; do
+        AFTER="$(latest_snapshot)"
+        AFTER_EPOCH="$(outcome_epoch || echo 0)"
+        [ "${AFTER_EPOCH:-0}" -ge "$success_from" ] && break
+        /bin/sleep 10
+        tries=$((tries + 1))
+    done
+    if [ "${AFTER_EPOCH:-0}" -ge "$success_from" ]; then
+        ATTEMPT_OK=1
+    fi
+    BEFORE="$before"
+    SUCCESS_FROM="$success_from"
+    DURATION=$(( $(/bin/date +%s) - start ))
+}
+
+SESSION="$(session_state)"
+log "session: $SESSION"
+
+ATTEMPT=1
+while :; do
+    EXCLUDED=0
+    if [ "$LEARNED_ENABLED" = "true" ] && [ "$SESSION" = "locked" ] && [ -s "$LEARNED_EXCL" ]; then
+        apply_learned_exclusions
+    fi
+
+    attempt_backup
+
+    if [ -f "$TEMP_EXCL" ]; then
+        restore_exclusions "$TEMP_EXCL"
+        log "exclusions: restored"
+    fi
+
+    if [ "$ATTEMPT_OK" = "1" ]; then
+        write_state success "$DURATION" "$EXCLUDED"
+        if [ "$EXCLUDED" -gt 0 ]; then
+            log "end: success duration=${DURATION}s (attempt $ATTEMPT, limited: $EXCLUDED exclusions)"
+            [ "$DO_NOTIFY" = "true" ] && notify "Limited backup completed ($EXCLUDED excluded paths)"
+        else
+            log "end: success duration=${DURATION}s (attempt $ATTEMPT)"
+            [ "$DO_NOTIFY" = "true" ] && notify "Backup completed in ${DURATION}s"
+        fi
+        break
+    fi
+
+    # Time Machine scrive RESULT qualche secondo dopo la fine del run: un ritentativo.
     RESULT_CODE="$(backup_result)"
     if [ -z "$RESULT_CODE" ]; then
         /bin/sleep 5
@@ -356,10 +380,19 @@ else
     REASON="$(result_reason "$RESULT_CODE")"
     [ "$RC" -ne 0 ] && REASON="tmutil rc=$RC / $REASON"
     write_state failed "$DURATION" "$EXCLUDED"
-    log "end: failed $REASON duration=${DURATION}s (snapshot before='$BEFORE' after='$AFTER')"
-    [ "$DO_NOTIFY" = "true" ] && notify "Backup failed: $REASON"
-    # Dal fallimento si impara la lista da escludere al prossimo giro.
-    if [ "$LEARNED_ENABLED" = "true" ]; then
-        learn_from_failure "$RUN_START" || log "learned: no paths found in this run"
+    log "end: failed $REASON duration=${DURATION}s (attempt $ATTEMPT, snapshot before='$BEFORE' after='$AFTER')"
+
+    # Un solo ritentativo, e solo a sessione bloccata: si riprova subito con le
+    # esclusioni appena imparate da questo fallimento. Altrimenti si aspetta domani.
+    if [ "$LEARNED_ENABLED" = "true" ] && [ "$SESSION" = "locked" ] && [ "$ATTEMPT" -lt 2 ]; then
+        if learn_from_failure "$ATTEMPT_START"; then
+            ATTEMPT=2
+            log "retry: second attempt with the learned exclusions"
+            continue
+        fi
+        log "learned: no paths found in this attempt"
     fi
-fi
+
+    [ "$DO_NOTIFY" = "true" ] && notify "Backup failed: $REASON"
+    break
+done
