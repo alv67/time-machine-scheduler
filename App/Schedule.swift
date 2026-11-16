@@ -5,6 +5,9 @@ struct LastRun: Codable, Equatable {
     var date: Date
     var result: String
     var durationSeconds: Int?
+    /// Vero quando il backup è stato fatto con percorsi inaccessibili esclusi.
+    var limited: Bool?
+    var excluded: Int?
 }
 
 /// Configurazione scritta dall'app e letta dal daemon.
@@ -21,6 +24,9 @@ struct ScheduleConfig: Codable, Equatable {
     /// Impedisce lo stand-by mentre il servizio è attivo: con uno sleep breve il Mac
     /// sarebbe addormentato all'orario pianificato.
     var keepAwake = false
+    /// Esclude per il singolo run i percorsi che Time Machine dichiara inaccessibili,
+    /// imparati dal run fallito precedente.
+    var limitedBackup = false
     var version = 1
 
     init() {}
@@ -38,6 +44,7 @@ struct ScheduleConfig: Codable, Equatable {
         skipOnBattery = try values.decodeIfPresent(Bool.self, forKey: .skipOnBattery) ?? defaults.skipOnBattery
         notify = try values.decodeIfPresent(Bool.self, forKey: .notify) ?? defaults.notify
         keepAwake = try values.decodeIfPresent(Bool.self, forKey: .keepAwake) ?? defaults.keepAwake
+        limitedBackup = try values.decodeIfPresent(Bool.self, forKey: .limitedBackup) ?? defaults.limitedBackup
         version = try values.decodeIfPresent(Int.self, forKey: .version) ?? defaults.version
     }
 }

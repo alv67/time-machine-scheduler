@@ -73,6 +73,7 @@ struct ScheduleTests {
         """
         let decoded = try! JSONDecoder().decode(ScheduleConfig.self, from: Data(legacy.utf8))
         assert(decoded.keepAwake == false)
+        assert(decoded.limitedBackup == false)
         assert(decoded.hour == 3 && decoded.minute == 30 && decoded.weekdays == [2])
         assert(decoded.requireDestination == false && decoded.skipOnBattery == true)
 

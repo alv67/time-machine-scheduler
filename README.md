@@ -39,6 +39,7 @@ installed with `osascript` and admin privileges (approach A).
 - **Your destination** — reads the destination configured in Time Machine, local or network, and checks that it is reachable.
 - **No surprises** — skips on battery, prevents sleep during the backup and notifies you when it ends.
 - **No standby** — optional: the daemon keeps the Mac awake so the scheduled time is not missed, while the display can still sleep.
+- **Learned exclusions** — optional: after a failed run the paths Time Machine could not read are learned, grouped by folder and excluded only for the next run, then the original list is restored. The backup completes and is marked as limited.
 - **Status and logs** — phase, percentage, last backup and a readable log with automatic rotation.
 - **Back up now** — start a backup outside the schedule without waiting for the next run.
 - **Clean restore** — removes daemon, script and logs and puts Time Machine back on the frequency you choose.
@@ -181,6 +182,10 @@ Help and About.
   logged in, still does; a missed run is logged and notified when the Mac wakes.
 - A backup skipped because the Mac was off or asleep is not caught up later; the
   next one runs at the next scheduled time.
+- A limited backup is missing the folders listed in the learned exclusions (by
+  default `Containers`, `Group Containers`, `Preferences`, `Application Scripts` and
+  `Weather` of every account) for that run. The next complete run brings them back,
+  but a restore from that snapshot does not have them.
 - "Prevent the Mac from going to sleep" keeps the Mac awake for as long as the
   service is active: more power and heat, and the battery drains on battery
   power. The display can still sleep. A Mac with the lid closed and no external
@@ -232,6 +237,8 @@ is updated.
 - `/Library/Application Support/TMScheduler/last-run.json`
 - `/Library/Application Support/TMScheduler/tmscheduler.log` (+ `.1`, `.2`, `.3`)
 - `/Library/Application Support/TMScheduler/wake` (date of the armed wake)
+- `/Library/Application Support/TMScheduler/exclusions-learned.txt` (paths to exclude)
+- `/Library/Application Support/TMScheduler/temporary-exclusions.txt` (only during a run)
 - `/Library/LaunchDaemons/local.tmscheduler.plist`
 - `/usr/local/bin/tmscheduler-daemon`
 - `/usr/local/bin/tmscheduler-run`
@@ -311,6 +318,20 @@ Then the daemon does one job:
    `missed: Mac asleep at HH:MM` and notifies;
 5. if no session is at the console at the scheduled time it logs `skip: no user at the console`,
    does not start the run, and notifies at the next login.
+
+**Learned exclusions** (opt-in): a run that starts with the device locked copies what it
+can and then refuses to publish, listing the paths it could not read
+(`Failed to backup N paths which are inaccessible while device is locked`). On failure
+the job reads that list from the unified log, groups the entries by folder — the deepest
+level that keeps at most 10 entries per account — and saves it in
+`exclusions-learned.txt`. On the next run it adds exactly those paths to Time Machine's
+exclusions (`SkipPaths`), runs, and removes them again: only paths the job added are
+removed, the user's own exclusions are untouched, and a leftover list from an
+interrupted run is cleaned at the next start. The run is recorded with
+`"limited": true` and the number of excluded paths.
+
+With `~/Library` excluded the backup no longer contains preferences, containers and
+caches of any account: documents, photos and projects are still there.
 
 `tmutil startbackup --block` exits 0 even when the backup fails, so the result is
 decided by the **newest** entry in `SnapshotDates` for the active destination in

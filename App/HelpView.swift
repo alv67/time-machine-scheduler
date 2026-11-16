@@ -29,6 +29,7 @@ struct HelpView: View {
                     "help.options.3",
                     "help.options.4",
                     "help.options.5",
+                    "help.options.6",
                 ])
 
                 section("help.backup.title", [

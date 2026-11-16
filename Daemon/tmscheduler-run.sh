@@ -5,14 +5,22 @@ CONF="/Library/Application Support/TMScheduler/config.json"
 LOG="/Library/Application Support/TMScheduler/tmscheduler.log"
 STATE="/Library/Application Support/TMScheduler/last-run.json"
 TM_PLIST="/Library/Preferences/com.apple.TimeMachine.plist"
+TEMP_EXCL="/Library/Application Support/TMScheduler/temporary-exclusions.txt"
+LEARNED_EXCL="/Library/Application Support/TMScheduler/exclusions-learned.txt"
+TM_DOMAIN="/Library/Preferences/com.apple.TimeMachine"
 
 log() { printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$LOG"; }
 
 jget() { /usr/bin/plutil -extract "$1" raw -o - "$CONF" 2>/dev/null; }
 
-write_state() { # <result> <durationSeconds>
-    printf '{"date":"%s","result":"%s","durationSeconds":%s}\n' \
-        "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$1" "$2" > "$STATE"
+write_state() { # <result> <durationSeconds> [excluded]
+    local extra=""
+    case "${3:-0}" in
+        ''|*[!0-9]*) : ;;
+        *) [ "$3" -gt 0 ] && extra=",\"limited\":true,\"excluded\":$3" ;;
+    esac
+    printf '{"date":"%s","result":"%s","durationSeconds":%s%s}\n' \
+        "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$1" "$2" "$extra" > "$STATE"
 }
 
 rotate_log() {
@@ -101,6 +109,7 @@ notify() {
 
 REQUIRE_DEST="$(jget requireDestination)"
 PREVENT_SLEEP="$(jget preventSleep)"
+LEARNED_ENABLED="$(jget limitedBackup)"
 SKIP_BATTERY="$(jget skipOnBattery)"
 DO_NOTIFY="$(jget notify)"
 
@@ -134,6 +143,12 @@ if /usr/bin/tmutil status -X 2>/dev/null | /usr/bin/plutil -extract Running raw 
     exit 0
 fi
 
+# Un run interrotto prima del ripristino lascerebbe esclusioni permanenti.
+if [ -f "$TEMP_EXCL" ]; then
+    restore_exclusions "$TEMP_EXCL"
+    log "exclusions: restored after an interrupted run"
+fi
+
 # `tmutil startbackup --block` esce 0 anche quando il backup fallisce: l'esito vero è la
 # comparsa di uno snapshot più recente. Il conteggio non serve: il thinning di Time Machine
 # cancella i backup vecchi e il numero può calare mentre ne appare uno nuovo.
@@ -157,6 +172,87 @@ result_reason() { # <RESULT>
         "") printf 'unknown RESULT' ;;
         *) printf 'RESULT %s' "$1" ;;
     esac
+}
+
+# Le esclusioni si scrivono direttamente in SkipPaths: `tmutil addexclusion` richiede
+# Full Disk Access, che un demone di sistema non ha.
+skip_paths() { # una riga per percorso escluso
+    /usr/bin/defaults read "$TM_DOMAIN" SkipPaths 2>/dev/null \
+        | /usr/bin/sed -n 's/^[[:space:]]*"\(.*\)",\{0,1\}$/\1/p'
+}
+
+write_skip_paths() { # stdin: una riga per percorso; nessuna riga = chiave rimossa
+    local -a list=()
+    local line
+    while IFS= read -r line; do
+        [ -n "$line" ] && list+=("$line")
+    done
+    if [ "${#list[@]}" -eq 0 ]; then
+        /usr/bin/defaults delete "$TM_DOMAIN" SkipPaths >/dev/null 2>&1 || true
+    else
+        /usr/bin/defaults write "$TM_DOMAIN" SkipPaths -array "${list[@]}"
+    fi
+}
+
+restore_exclusions() { # <file con i percorsi aggiunti da noi>
+    local line
+    local -a keep=()
+    [ -f "$1" ] || return 0
+    while IFS= read -r line; do
+        /usr/bin/grep -qxF -- "$line" "$1" || keep+=("$line")
+    done < <(skip_paths)
+    if [ "${#keep[@]}" -gt 0 ]; then
+        printf '%s\n' "${keep[@]}" | write_skip_paths
+    else
+        write_skip_paths < /dev/null
+    fi
+    /bin/rm -f "$1"
+}
+
+apply_learned_exclusions() {
+    [ -s "$LEARNED_EXCL" ] || return 0
+    local path
+    : > "$TEMP_EXCL"
+    while IFS= read -r path; do
+        skip_paths | /usr/bin/grep -qxF -- "$path" && continue
+        printf '%s\n' "$path" >> "$TEMP_EXCL"
+    done < "$LEARNED_EXCL"
+    [ -s "$TEMP_EXCL" ] || return 0
+    { skip_paths; /bin/cat "$TEMP_EXCL"; } | write_skip_paths
+    EXCLUDED=$(/usr/bin/wc -l < "$TEMP_EXCL" | /usr/bin/tr -d ' ')
+    log "exclusions: $EXCLUDED learned paths excluded for this run"
+}
+
+# Dal run fallito si impara la lista dei percorsi protetti, accorpata alla profondità
+# più profonda che resta sotto 10 voci per utente.
+learn_from_failure() { # <data di inizio del run, formato di log show>
+    local paths="$TEMP_EXCL.paths" grouped depth max
+    /usr/bin/log show --info --start "$1" --predicate 'process == "backupd"' 2>/dev/null \
+        | /usr/bin/grep -o 'Failed to backup [0-9]* paths[^]]*]' \
+        | /usr/bin/sed 's/.*locked:\[//; s/"\]$//' \
+        | /usr/bin/sed 's/", "/\n/g' \
+        | /usr/bin/sed 's/^"//; s/^\\n//' \
+        | /usr/bin/grep -E '^(Users|private)/' \
+        | /usr/bin/sed 's#^#/#' \
+        | /usr/bin/sort -u > "$paths"
+    if [ ! -s "$paths" ]; then
+        /bin/rm -f "$paths"
+        return 1
+    fi
+    for depth in 7 6 5 4 3 2; do
+        grouped="$(/usr/bin/cut -d/ -f1-$((depth + 1)) "$paths" | /usr/bin/sort -u)"
+        max="$(printf '%s\n' "$grouped" | /usr/bin/awk -F/ '{print $3}' \
+            | /usr/bin/sort | /usr/bin/uniq -c | /usr/bin/sort -rn | /usr/bin/head -1 \
+            | /usr/bin/awk '{print $1}')"
+        if [ "${max:-0}" -le 10 ]; then
+            printf '%s\n' "$grouped" > "$LEARNED_EXCL"
+            log "learned: $(printf '%s\n' "$grouped" | /usr/bin/wc -l | /usr/bin/tr -d ' ') exclusions, depth $depth, max $max per user"
+            /bin/rm -f "$paths"
+            return 0
+        fi
+    done
+    /bin/rm -f "$paths"
+    return 1
 }
 
 rotate_log
@@ -187,24 +283,49 @@ outcome_epoch() {
 }
 
 START=$(/bin/date +%s)
+RUN_START="$(/bin/date -r "$START" '+%Y-%m-%d %H:%M:%S')"
 BEFORE="$(latest_snapshot)"
 
-if [ "$PREVENT_SLEEP" = "true" ]; then
-    /usr/bin/caffeinate -i /usr/bin/tmutil startbackup --auto --block
-else
-    /usr/bin/tmutil startbackup --auto --block
+# Esclusioni imparate: si applicano solo per questo run e si tolgono subito dopo.
+EXCLUDED=0
+if [ "$LEARNED_ENABLED" = "true" ] && [ -s "$LEARNED_EXCL" ]; then
+    apply_learned_exclusions
 fi
+# Due minuti di tolleranza: se il backup è di questo run, il nome cade nella finestra.
+SUCCESS_FROM=$((START - 120))
+
+# Il successo si riconosce mentre il run è in corso, appena il backup compare: alla fine
+# la destinazione viene smontata e né latestbackup né le preferenze sono leggibili.
+if [ "$PREVENT_SLEEP" = "true" ]; then
+    /usr/bin/caffeinate -i /usr/bin/tmutil startbackup --auto --block &
+else
+    /usr/bin/tmutil startbackup --auto --block &
+fi
+BACKUP_PID=$!
+
+SUCCESS=0
+while kill -0 "$BACKUP_PID" 2>/dev/null; do
+    if [ "$SUCCESS" = "0" ]; then
+        FOUND="$(outcome_epoch || true)"
+        if [ -n "$FOUND" ] && [ "$FOUND" -ge "$SUCCESS_FROM" ]; then
+            SUCCESS=1
+        fi
+    fi
+    /bin/sleep 10
+done
+wait "$BACKUP_PID"
 RC=$?
 
-# Time Machine riscrive le preferenze alla fine del run: per un po' le letture possono
-# tornare vuote o vecchie. Si riprova per un paio di minuti, e in caso di fallimento si
-# scrivono i valori letti: senza quelli si finisce a indovinare.
+if [ -f "$TEMP_EXCL" ]; then
+    restore_exclusions "$TEMP_EXCL"
+    log "exclusions: restored"
+fi
+
+# Riprova finale, per il caso in cui il backup compaia solo alla chiusura.
 ATTEMPTS=0
 AFTER=""
 AFTER_EPOCH=0
-# Due minuti di tolleranza: se il backup è di questo run, il nome cade nella finestra.
-SUCCESS_FROM=$((START - 120))
-while [ "$ATTEMPTS" -lt 18 ]; do
+while [ "$ATTEMPTS" -lt 18 ] && [ "$SUCCESS" = "0" ]; do
     AFTER="$(latest_snapshot)"
     AFTER_EPOCH="$(outcome_epoch || echo 0)"
     [ "${AFTER_EPOCH:-0}" -ge "$SUCCESS_FROM" ] && break
@@ -215,10 +336,15 @@ done
 END=$(/bin/date +%s)
 DURATION=$((END - START))
 
-if [ "${AFTER_EPOCH:-0}" -ge "$SUCCESS_FROM" ]; then
-    write_state success "$DURATION"
-    log "end: success duration=${DURATION}s"
-    [ "$DO_NOTIFY" = "true" ] && notify "Backup completed in ${DURATION}s"
+if [ "$SUCCESS" = "1" ] || [ "${AFTER_EPOCH:-0}" -ge "$SUCCESS_FROM" ]; then
+    write_state success "$DURATION" "$EXCLUDED"
+    if [ "$EXCLUDED" -gt 0 ]; then
+        log "end: success duration=${DURATION}s (limited: $EXCLUDED exclusions)"
+        [ "$DO_NOTIFY" = "true" ] && notify "Limited backup completed ($EXCLUDED excluded paths)"
+    else
+        log "end: success duration=${DURATION}s"
+        [ "$DO_NOTIFY" = "true" ] && notify "Backup completed in ${DURATION}s"
+    fi
 else
     # Time Machine scrive RESULT qualche secondo dopo la fine del run, e la lettura
     # può fallire mentre la preferenza viene riscritta: un solo ritentativo.
@@ -229,7 +355,11 @@ else
     fi
     REASON="$(result_reason "$RESULT_CODE")"
     [ "$RC" -ne 0 ] && REASON="tmutil rc=$RC / $REASON"
-    write_state failed "$DURATION"
+    write_state failed "$DURATION" "$EXCLUDED"
     log "end: failed $REASON duration=${DURATION}s (snapshot before='$BEFORE' after='$AFTER')"
     [ "$DO_NOTIFY" = "true" ] && notify "Backup failed: $REASON"
+    # Dal fallimento si impara la lista da escludere al prossimo giro.
+    if [ "$LEARNED_ENABLED" = "true" ]; then
+        learn_from_failure "$RUN_START" || log "learned: no paths found in this run"
+    fi
 fi

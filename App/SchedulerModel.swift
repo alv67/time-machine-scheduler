@@ -137,6 +137,9 @@ final class SchedulerModel: ObservableObject {
             let minutes = duration / 60
             text += minutes > 0 ? L("lastRun.minutes", minutes) : L("lastRun.seconds", duration)
         }
+        if lastRun.limited == true {
+            text += L("lastRun.limited", lastRun.excluded ?? 0)
+        }
         return text
     }
 
