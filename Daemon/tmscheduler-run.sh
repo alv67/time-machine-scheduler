@@ -14,13 +14,15 @@ log() { printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$LOG"; }
 jget() { /usr/bin/plutil -extract "$1" raw -o - "$CONF" 2>/dev/null; }
 
 write_state() { # <result> <durationSeconds> [excluded]
-    local extra=""
-    case "${3:-0}" in
-        ''|*[!0-9]*) : ;;
-        *) [ "$3" -gt 0 ] && extra=",\"limited\":true,\"excluded\":$3" ;;
+    local result="$1" duration="$2" excluded="${3:-0}" extra=""
+    case "$excluded" in
+        ''|*[!0-9]*) excluded=0 ;;
     esac
+    if [ "$excluded" -gt 0 ]; then
+        extra=",\"limited\":true,\"excluded\":$excluded"
+    fi
     printf '{"date":"%s","result":"%s","durationSeconds":%s%s}\n' \
-        "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$1" "$2" "$extra" > "$STATE"
+        "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$result" "$duration" "$extra" > "$STATE"
 }
 
 rotate_log() {
@@ -169,6 +171,7 @@ backup_result() {
 result_reason() { # <RESULT>
     case "$1" in
         80) printf 'device locked (RESULT 80)' ;;
+        48) printf 'destination mount dropped (RESULT 48)' ;;
         "") printf 'unknown RESULT' ;;
         *) printf 'RESULT %s' "$1" ;;
     esac
@@ -382,15 +385,19 @@ while :; do
     write_state failed "$DURATION" "$EXCLUDED"
     log "end: failed $REASON duration=${DURATION}s (attempt $ATTEMPT, snapshot before='$BEFORE' after='$AFTER')"
 
-    # Un solo ritentativo, e solo a sessione bloccata: si riprova subito con le
-    # esclusioni appena imparate da questo fallimento. Altrimenti si aspetta domani.
-    if [ "$LEARNED_ENABLED" = "true" ] && [ "$SESSION" = "locked" ] && [ "$ATTEMPT" -lt 2 ]; then
-        if learn_from_failure "$ATTEMPT_START"; then
+    # Un solo ritentativo, e solo a sessione bloccata. Se il fallimento ha prodotto
+    # percorsi inaccessibili si riprova subito con quelli esclusi; altrimenti (montaggio
+    # caduto, errore transitorio) si riprova dopo una pausa, senza esclusioni.
+    if [ "$ATTEMPT" -lt 2 ] && [ "$SESSION" = "locked" ]; then
+        if [ "$LEARNED_ENABLED" = "true" ] && learn_from_failure "$ATTEMPT_START"; then
             ATTEMPT=2
             log "retry: second attempt with the learned exclusions"
             continue
         fi
-        log "learned: no paths found in this attempt"
+        log "retry: nothing to learn, second attempt in 2 minutes"
+        ATTEMPT=2
+        /bin/sleep 120
+        continue
     fi
 
     [ "$DO_NOTIFY" = "true" ] && notify "Backup failed: $REASON"
