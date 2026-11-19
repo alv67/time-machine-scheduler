@@ -217,6 +217,7 @@ apply_learned_exclusions() {
     local path
     : > "$TEMP_EXCL"
     while IFS= read -r path; do
+        [ -e "$path" ] || continue
         skip_paths | /usr/bin/grep -qxF -- "$path" && continue
         printf '%s\n' "$path" >> "$TEMP_EXCL"
     done < "$LEARNED_EXCL"
@@ -242,12 +243,15 @@ learn_from_failure() { # <data di inizio del run, formato di log show>
         /bin/rm -f "$paths"
         return 1
     fi
+    # Con le sottocartelle escluse Time Machine continua a dichiarare inaccessibili gli
+    # stessi percorsi (verificato il 19 novembre): serve il livello dei genitori, quindi
+    # si accorpa finché non restano al massimo 2 voci per utente.
     for depth in 7 6 5 4 3 2; do
         grouped="$(/usr/bin/cut -d/ -f1-$((depth + 1)) "$paths" | /usr/bin/sort -u)"
         max="$(printf '%s\n' "$grouped" | /usr/bin/awk -F/ '{print $3}' \
             | /usr/bin/sort | /usr/bin/uniq -c | /usr/bin/sort -rn | /usr/bin/head -1 \
             | /usr/bin/awk '{print $1}')"
-        if [ "${max:-0}" -le 10 ]; then
+        if [ "${max:-0}" -le 2 ]; then
             printf '%s\n' "$grouped" > "$LEARNED_EXCL"
             log "learned: $(printf '%s\n' "$grouped" | /usr/bin/wc -l | /usr/bin/tr -d ' ') exclusions, depth $depth, max $max per user"
             /bin/rm -f "$paths"
