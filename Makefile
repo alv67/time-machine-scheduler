@@ -28,6 +28,15 @@ SIGN_ID ?= -
 # lo esegue.
 DAEMON_SRC := App/Schedule.swift Daemon/main.swift
 DAEMON := $(BUILD)/$(APP_NAME)-daemon
+# La concessione Full Disk Access del demone è agganciata alla firma: ad-hoc cambia
+# cdhash a ogni build e il permesso muore in silenzio. Se c'è un'identità di sviluppo
+# la si usa, altrimenti (CI) resta ad-hoc.
+DAEMON_ID := $(shell security find-identity -v -p codesigning 2>/dev/null | sed -n 's/^.*"\(Apple Development: [^"]*\)".*/\1/p' | head -1)
+ifeq ($(DAEMON_ID),)
+DAEMON_SIGN := -
+else
+DAEMON_SIGN := $(DAEMON_ID)
+endif
 
 .PHONY: app test run clean icon refresh-icon dmg zip release checksums install
 
@@ -38,6 +47,7 @@ icon: $(ICON_PNG)
 $(DAEMON): $(DAEMON_SRC)
 	mkdir -p $(BUILD)
 	swiftc -O -sdk $(SDK) -target $(HOST_ARCH)-apple-macos$(MACOS_MIN) $(DAEMON_SRC) -o $@
+	codesign --force --identifier local.tmscheduler.daemon --sign "$(DAEMON_SIGN)" $@
 
 refresh-icon: app
 	touch $(APP)

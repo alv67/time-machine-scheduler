@@ -177,8 +177,9 @@ result_reason() { # <RESULT>
     esac
 }
 
-# Le esclusioni si scrivono direttamente in SkipPaths: `tmutil addexclusion` richiede
-# Full Disk Access, che un demone di sistema non ha.
+# Le esclusioni si scrivono direttamente in SkipPaths: la preferenza di Time Machine è
+# protetta, e il kernel nega la scrittura (user-preference-write) a chi non ha Full Disk
+# Access — il demone va aggiunto a mano in Impostazioni di Sistema, una volta.
 skip_paths() { # una riga per percorso escluso
     /usr/bin/defaults read "$TM_DOMAIN" SkipPaths 2>/dev/null \
         | /usr/bin/sed -n 's/^[[:space:]]*"\(.*\)",\{0,1\}$/\1/p'
@@ -192,9 +193,12 @@ write_skip_paths() { # stdin: una riga per percorso; nessuna riga = chiave rimos
     done
     if [ "${#list[@]}" -eq 0 ]; then
         /usr/bin/defaults delete "$TM_DOMAIN" SkipPaths >/dev/null 2>&1 || true
-    else
-        /usr/bin/defaults write "$TM_DOMAIN" SkipPaths -array "${list[@]}"
+        return 0
     fi
+    # Il kernel nega la scrittura a chi non ha Full Disk Access e defaults non sempre lo
+    # riporta: senza il confronto il run dichiara esclusioni che non sono mai state scritte.
+    /usr/bin/defaults write "$TM_DOMAIN" SkipPaths -array "${list[@]}" || return 1
+    [ "$(skip_paths)" = "$(printf '%s\n' "${list[@]}")" ]
 }
 
 restore_exclusions() { # <file con i percorsi aggiunti da noi>
@@ -222,13 +226,17 @@ apply_learned_exclusions() {
         printf '%s\n' "$path" >> "$TEMP_EXCL"
     done < "$LEARNED_EXCL"
     [ -s "$TEMP_EXCL" ] || return 0
-    { skip_paths; /bin/cat "$TEMP_EXCL"; } | write_skip_paths
+    if ! { skip_paths; /bin/cat "$TEMP_EXCL"; } | write_skip_paths; then
+        /bin/rm -f "$TEMP_EXCL"
+        log "exclusions: NOT applied, the write was denied (grant Full Disk Access to /usr/local/bin/tmscheduler-daemon)"
+        return 1
+    fi
     EXCLUDED=$(/usr/bin/wc -l < "$TEMP_EXCL" | /usr/bin/tr -d ' ')
     log "exclusions: $EXCLUDED learned paths excluded for this run"
 }
 
 # Dal run fallito si impara la lista dei percorsi protetti, accorpata alla profondità
-# più profonda che resta sotto 10 voci per utente.
+# più profonda che resta sotto 2 voci per utente.
 learn_from_failure() { # <data di inizio del run, formato di log show>
     local paths="$TEMP_EXCL.paths" grouped depth max
     /usr/bin/log show --info --start "$1" --predicate 'process == "backupd"' 2>/dev/null \
@@ -243,9 +251,9 @@ learn_from_failure() { # <data di inizio del run, formato di log show>
         /bin/rm -f "$paths"
         return 1
     fi
-    # Con le sottocartelle escluse Time Machine continua a dichiarare inaccessibili gli
-    # stessi percorsi (verificato il 19 novembre): serve il livello dei genitori, quindi
-    # si accorpa finché non restano al massimo 2 voci per utente.
+    # Si accorpa finché non restano al massimo 2 voci per utente: la lista finisce sul
+    # ~/Library di ogni utente (+ /private/var/folders), l'unica profondità verificata
+    # con un run a dispositivo bloccato riuscito (16 novembre, esclusioni scritte a mano).
     for depth in 7 6 5 4 3 2; do
         grouped="$(/usr/bin/cut -d/ -f1-$((depth + 1)) "$paths" | /usr/bin/sort -u)"
         max="$(printf '%s\n' "$grouped" | /usr/bin/awk -F/ '{print $3}' \
@@ -355,15 +363,9 @@ log "session: $SESSION"
 ATTEMPT=1
 while :; do
     EXCLUDED=0
+    APPLY_OK=1
     if [ "$LEARNED_ENABLED" = "true" ] && [ "$SESSION" = "locked" ] && [ -s "$LEARNED_EXCL" ]; then
-        apply_learned_exclusions
-        # Scrivere SkipPaths non basta: in due notti il run partito subito dopo le ha
-        # ignorate. Il 16 novembre, con le stesse esclusioni in lista da ~20 minuti, era
-        # riuscito. backupd non si può riavviare (SIP), quindi si aspetta.
-        if [ "$EXCLUDED" -gt 0 ]; then
-            log "exclusions: waiting 20 minutes before the run, so backupd picks them up"
-            /bin/sleep 1200
-        fi
+        apply_learned_exclusions || APPLY_OK=0
     fi
 
     attempt_backup
@@ -396,10 +398,9 @@ while :; do
     write_state failed "$DURATION" "$EXCLUDED"
     log "end: failed $REASON duration=${DURATION}s (attempt $ATTEMPT, snapshot before='$BEFORE' after='$AFTER')"
 
-    # Un solo ritentativo, e solo a sessione bloccata. Se il fallimento ha prodotto
-    # percorsi inaccessibili si riprova subito con quelli esclusi; altrimenti (montaggio
-    # caduto, errore transitorio) si riprova dopo una pausa, senza esclusioni.
-    if [ "$ATTEMPT" -lt 2 ] && [ "$SESSION" = "locked" ]; then
+    # Un solo ritentativo, e solo a sessione bloccata. Con la scrittura negata il
+    # ritentativo ripeterebbe lo stesso fallimento, quindi non ha senso.
+    if [ "$ATTEMPT" -lt 2 ] && [ "$SESSION" = "locked" ] && [ "$APPLY_OK" = "1" ]; then
         if [ "$LEARNED_ENABLED" = "true" ] && learn_from_failure "$ATTEMPT_START"; then
             ATTEMPT=2
             log "retry: second attempt with the learned exclusions"
