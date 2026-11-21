@@ -147,8 +147,11 @@ fi
 
 # Un run interrotto prima del ripristino lascerebbe esclusioni permanenti.
 if [ -f "$TEMP_EXCL" ]; then
-    restore_exclusions "$TEMP_EXCL"
-    log "exclusions: restored after an interrupted run"
+    if restore_exclusions "$TEMP_EXCL"; then
+        log "exclusions: restored after an interrupted run"
+    else
+        log "exclusions: RESTORE FAILED after an interrupted run, temporary entries still active"
+    fi
 fi
 
 # `tmutil startbackup --block` esce 0 anche quando il backup fallisce: l'esito vero è la
@@ -201,19 +204,25 @@ write_skip_paths() { # stdin: una riga per percorso; nessuna riga = chiave rimos
     [ "$(skip_paths)" = "$(printf '%s\n' "${list[@]}")" ]
 }
 
-restore_exclusions() { # <file con i percorsi aggiunti da noi>
-    local line
+restore_exclusions() { # <file con i percorsi aggiunti da noi> → 0 se SkipPaths è tornato pulito
+    local line ok=1
     local -a keep=()
     [ -f "$1" ] || return 0
     while IFS= read -r line; do
         /usr/bin/grep -qxF -- "$line" "$1" || keep+=("$line")
     done < <(skip_paths)
     if [ "${#keep[@]}" -gt 0 ]; then
-        printf '%s\n' "${keep[@]}" | write_skip_paths
+        printf '%s\n' "${keep[@]}" | write_skip_paths || ok=0
     else
         write_skip_paths < /dev/null
     fi
+    # "restored" deve corrispondere alla preferenza: se il ripristino venisse negato le
+    # esclusioni resterebbero attive per sempre.
+    while IFS= read -r line; do
+        skip_paths | /usr/bin/grep -qxF -- "$line" && ok=0
+    done < "$1"
     /bin/rm -f "$1"
+    [ "$ok" = "1" ]
 }
 
 apply_learned_exclusions() {
@@ -371,8 +380,11 @@ while :; do
     attempt_backup
 
     if [ -f "$TEMP_EXCL" ]; then
-        restore_exclusions "$TEMP_EXCL"
-        log "exclusions: restored"
+        if restore_exclusions "$TEMP_EXCL"; then
+            log "exclusions: restored"
+        else
+            log "exclusions: RESTORE FAILED, temporary entries still active"
+        fi
     fi
 
     if [ "$ATTEMPT_OK" = "1" ]; then
