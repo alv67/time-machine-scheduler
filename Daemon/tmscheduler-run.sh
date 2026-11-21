@@ -357,6 +357,13 @@ while :; do
     EXCLUDED=0
     if [ "$LEARNED_ENABLED" = "true" ] && [ "$SESSION" = "locked" ] && [ -s "$LEARNED_EXCL" ]; then
         apply_learned_exclusions
+        # Scrivere SkipPaths non basta: in due notti il run partito subito dopo le ha
+        # ignorate. Il 16 novembre, con le stesse esclusioni in lista da ~20 minuti, era
+        # riuscito. backupd non si può riavviare (SIP), quindi si aspetta.
+        if [ "$EXCLUDED" -gt 0 ]; then
+            log "exclusions: waiting 20 minutes before the run, so backupd picks them up"
+            /bin/sleep 1200
+        fi
     fi
 
     attempt_backup
