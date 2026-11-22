@@ -31,6 +31,7 @@ final class SchedulerModel: ObservableObject {
     @Published var busy = false
     @Published var showRestoreDialog = false
     @Published var errorMessage: String?
+    @Published var fdaState: FDAState?
 
     init() {
         load()
@@ -51,8 +52,22 @@ final class SchedulerModel: ObservableObject {
         tmInterval = TMController.autoBackupInterval()
         destination = TMController.destination()
         lastRun = TMController.lastRun()
+        fdaState = TMController.fdaState()
         logLines = TMController.logTail()
         installed = FileManager.default.fileExists(atPath: Paths.plist)
+    }
+
+    /// L'avviso FDA serve solo se l'opzione è accesa e la sonda del demone dice che la
+    /// scrittura viene negata: senza il permesso il run a schermo bloccato fallisce.
+    var fdaWarningVisible: Bool {
+        config.limitedBackup && fdaState?.fda == false
+    }
+
+    func openFullDiskAccessSettings() {
+        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!
+        if !NSWorkspace.shared.open(url) {
+            NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/System Settings.app"))
+        }
     }
 
     func apply() {

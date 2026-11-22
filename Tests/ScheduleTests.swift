@@ -66,6 +66,22 @@ struct ScheduleTests {
         config.enabled = false
         assert(!ScheduleLogic.isDue(at: at(0), config: config, lastRun: nil, calendar: calendar))
 
+        // finestra del risveglio armato: il DarkWake va tenuto sveglio da slot-lead a
+        // slot+grace, e solo lì (con keepAwake spento il Mac può dormire il resto della notte)
+        assert(ScheduleLogic.isWakeWindow(at: at(-119), slot: slot, lead: 120, grace: 60))
+        assert(ScheduleLogic.isWakeWindow(at: at(0), slot: slot, lead: 120, grace: 60))
+        assert(ScheduleLogic.isWakeWindow(at: at(59), slot: slot, lead: 120, grace: 60))
+        assert(!ScheduleLogic.isWakeWindow(at: at(-120), slot: slot, lead: 120, grace: 60))
+        assert(!ScheduleLogic.isWakeWindow(at: at(60), slot: slot, lead: 120, grace: 60))
+        assert(!ScheduleLogic.isWakeWindow(at: at(3600), slot: slot, lead: 120, grace: 60))
+
+        // missed solo quando la finestra per partire è passata: un risveglio pmset può
+        // capitare esattamente dentro lo slot, e quel run va fatto lo stesso
+        assert(!ScheduleLogic.isMissedSlot(at: at(0), slot: slot, grace: 60))
+        assert(!ScheduleLogic.isMissedSlot(at: at(59), slot: slot, grace: 60))
+        assert(ScheduleLogic.isMissedSlot(at: at(60), slot: slot, grace: 60))
+        assert(ScheduleLogic.isMissedSlot(at: at(3600), slot: slot, grace: 60))
+
         // config.json scritto prima di keepAwake: manca la chiave, il resto resta
         let legacy = """
         {"enabled":true,"hour":3,"minute":30,"weekdays":[2],"requireDestination":false,

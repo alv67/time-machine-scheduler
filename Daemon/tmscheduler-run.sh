@@ -105,6 +105,71 @@ notify() {
         -e "display notification \"$1\" with title \"Time Machine Scheduler\"" >/dev/null 2>&1 || true
 }
 
+# Le esclusioni si scrivono direttamente in SkipPaths: la preferenza di Time Machine è
+# protetta, e il kernel nega la scrittura (user-preference-write) a chi non ha Full Disk
+# Access — il demone va aggiunto a mano in Impostazioni di Sistema, una volta.
+# Stanno qui, prima del blocco che ripulisce un run interrotto: bash non definisce una
+# funzione prima di raggiungerla, e quel blocco chiamava restore_exclusions quando ancora
+# non esisteva (127 silenzioso, con il log che diceva "restored").
+skip_paths() { # una riga per percorso escluso
+    /usr/bin/defaults read "$TM_DOMAIN" SkipPaths 2>/dev/null \
+        | /usr/bin/sed -n 's/^[[:space:]]*"\(.*\)",\{0,1\}$/\1/p'
+}
+
+write_skip_paths() { # stdin: una riga per percorso; nessuna riga = chiave rimossa
+    local -a list=()
+    local line
+    while IFS= read -r line; do
+        [ -n "$line" ] && list+=("$line")
+    done
+    if [ "${#list[@]}" -eq 0 ]; then
+        /usr/bin/defaults delete "$TM_DOMAIN" SkipPaths >/dev/null 2>&1 || true
+        return 0
+    fi
+    # Il kernel nega la scrittura a chi non ha Full Disk Access e defaults non sempre lo
+    # riporta: senza il confronto il run dichiara esclusioni che non sono mai state scritte.
+    /usr/bin/defaults write "$TM_DOMAIN" SkipPaths -array "${list[@]}" || return 1
+    [ "$(skip_paths)" = "$(printf '%s\n' "${list[@]}")" ]
+}
+
+restore_exclusions() { # <file con i percorsi aggiunti da noi> → 0 se SkipPaths è tornato pulito
+    local line ok=1
+    local -a keep=()
+    [ -f "$1" ] || return 0
+    while IFS= read -r line; do
+        /usr/bin/grep -qxF -- "$line" "$1" || keep+=("$line")
+    done < <(skip_paths)
+    if [ "${#keep[@]}" -gt 0 ]; then
+        printf '%s\n' "${keep[@]}" | write_skip_paths || ok=0
+    else
+        write_skip_paths < /dev/null
+    fi
+    # "restored" deve corrispondere alla preferenza: se il ripristino venisse negato le
+    # esclusioni resterebbero attive per sempre.
+    while IFS= read -r line; do
+        skip_paths | /usr/bin/grep -qxF -- "$line" && ok=0
+    done < "$1"
+    /bin/rm -f "$1"
+    [ "$ok" = "1" ]
+}
+
+# `--fda-check`: sonda del permesso Full Disk Access, lanciata dal demone nel suo contesto
+# launchd — da un'app la scrittura verrebbe attribuita all'app e l'esito sarebbe falso.
+# Riscrive SkipPaths con il valore corrente, la stessa scrittura del run a schermo
+# bloccato: se il kernel la nega esce 1. Prima dei controlli del run, che escono per
+# conto loro e falsificherebbero l'esito.
+if [ "${1:-}" = "--fda-check" ]; then
+    if [ -z "$(skip_paths)" ]; then
+        # Lista vuota: una voce fittizia misura la scrittura e viene tolta subito. Se la
+        # scrittura passa, passa anche la cancellazione: nessun residuo possibile.
+        printf '%s\n' "/usr/local/bin/tmscheduler-fda-check" | write_skip_paths || exit 1
+        /usr/bin/defaults delete "$TM_DOMAIN" SkipPaths >/dev/null 2>&1 || true
+        exit 0
+    fi
+    skip_paths | write_skip_paths && exit 0
+    exit 1
+fi
+
 [ -f "$CONF" ] || exit 0
 
 [ "$(jget enabled)" = "true" ] || exit 0
@@ -178,51 +243,6 @@ result_reason() { # <RESULT>
         "") printf 'unknown RESULT' ;;
         *) printf 'RESULT %s' "$1" ;;
     esac
-}
-
-# Le esclusioni si scrivono direttamente in SkipPaths: la preferenza di Time Machine è
-# protetta, e il kernel nega la scrittura (user-preference-write) a chi non ha Full Disk
-# Access — il demone va aggiunto a mano in Impostazioni di Sistema, una volta.
-skip_paths() { # una riga per percorso escluso
-    /usr/bin/defaults read "$TM_DOMAIN" SkipPaths 2>/dev/null \
-        | /usr/bin/sed -n 's/^[[:space:]]*"\(.*\)",\{0,1\}$/\1/p'
-}
-
-write_skip_paths() { # stdin: una riga per percorso; nessuna riga = chiave rimossa
-    local -a list=()
-    local line
-    while IFS= read -r line; do
-        [ -n "$line" ] && list+=("$line")
-    done
-    if [ "${#list[@]}" -eq 0 ]; then
-        /usr/bin/defaults delete "$TM_DOMAIN" SkipPaths >/dev/null 2>&1 || true
-        return 0
-    fi
-    # Il kernel nega la scrittura a chi non ha Full Disk Access e defaults non sempre lo
-    # riporta: senza il confronto il run dichiara esclusioni che non sono mai state scritte.
-    /usr/bin/defaults write "$TM_DOMAIN" SkipPaths -array "${list[@]}" || return 1
-    [ "$(skip_paths)" = "$(printf '%s\n' "${list[@]}")" ]
-}
-
-restore_exclusions() { # <file con i percorsi aggiunti da noi> → 0 se SkipPaths è tornato pulito
-    local line ok=1
-    local -a keep=()
-    [ -f "$1" ] || return 0
-    while IFS= read -r line; do
-        /usr/bin/grep -qxF -- "$line" "$1" || keep+=("$line")
-    done < <(skip_paths)
-    if [ "${#keep[@]}" -gt 0 ]; then
-        printf '%s\n' "${keep[@]}" | write_skip_paths || ok=0
-    else
-        write_skip_paths < /dev/null
-    fi
-    # "restored" deve corrispondere alla preferenza: se il ripristino venisse negato le
-    # esclusioni resterebbero attive per sempre.
-    while IFS= read -r line; do
-        skip_paths | /usr/bin/grep -qxF -- "$line" && ok=0
-    done < "$1"
-    /bin/rm -f "$1"
-    [ "$ok" = "1" ]
 }
 
 apply_learned_exclusions() {

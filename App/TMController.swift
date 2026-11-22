@@ -91,6 +91,14 @@ enum TMController {
         return try? decoder.decode(LastRun.self, from: data)
     }
 
+    /// Esito della sonda Full Disk Access scritta dal demone (nil se mai eseguita).
+    static func fdaState() -> FDAState? {
+        guard let data = try? Data(contentsOf: URL(fileURLWithPath: Paths.fdaState)) else { return nil }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try? decoder.decode(FDAState.self, from: data)
+    }
+
     static func logTail(maxLines: Int = 200) -> [String] {
         guard let text = try? String(contentsOfFile: Paths.log, encoding: .utf8) else { return [] }
         return Array(text.split(separator: "\n", omittingEmptySubsequences: true).suffix(maxLines)).map(String.init)

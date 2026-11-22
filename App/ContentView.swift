@@ -14,6 +14,10 @@ struct ContentView: View {
                 banner
             }
 
+            if model.fdaWarningVisible {
+                fdaBanner
+            }
+
             scheduleSection
             optionsSection
 
@@ -80,6 +84,26 @@ struct ContentView: View {
         }
         .padding(10)
         .background(.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var fdaBanner: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "exclamationmark.shield.fill")
+                .foregroundStyle(.red)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("fda.title")
+                    .font(.callout)
+                Text("fda.hint")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button("fda.button") {
+                model.openFullDiskAccessSettings()
+            }
+        }
+        .padding(10)
+        .background(.red.opacity(0.10), in: RoundedRectangle(cornerRadius: 8))
     }
 
     private var scheduleSection: some View {

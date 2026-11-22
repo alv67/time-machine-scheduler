@@ -6,6 +6,10 @@
 "banner.hint" = "Apri Impostazioni e scegli «Manualmente» per evitare backup doppi.";
 "banner.button" = "Apri Impostazioni Time Machine";
 
+"fda.title" = "Al demone manca l'Accesso completo al disco";
+"fda.hint" = "Con lo schermo bloccato il backup non riesce a scrivere le esclusioni e fallisce. Aggiungi /usr/local/bin/tmscheduler-daemon in Accesso completo al disco.";
+"fda.button" = "Apri Accesso completo al disco";
+
 "schedule.enabled" = "Pianificazione attiva";
 "schedule.time" = "Ora di avvio";
 

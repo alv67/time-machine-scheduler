@@ -161,6 +161,30 @@ private func consoleUID() -> uid_t? {
     return uid_t(owner.uint32Value)
 }
 
+/// Sonda Full Disk Access: la lancia il demone perché solo nel suo contesto launchd la
+/// scrittura è attribuita a lui — da un'app sarebbe attribuita all'app e l'esito falso.
+private func probeFDA() -> Bool {
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/bin/bash")
+    process.arguments = [Paths.script, "--fda-check"]
+    process.standardOutput = FileHandle.nullDevice
+    process.standardError = FileHandle.nullDevice
+    guard (try? process.run()) != nil else { return false }
+    process.waitUntilExit()
+    return process.terminationStatus == 0
+}
+
+private func writeFDAState(_ ok: Bool) {
+    let encoder = JSONEncoder()
+    encoder.dateEncodingStrategy = .iso8601
+    guard let data = try? encoder.encode(FDAState(fda: ok, checked: Date())) else { return }
+    try? data.write(to: URL(fileURLWithPath: Paths.fdaState))
+}
+
+private func logFDA(_ ok: Bool) {
+    log(ok ? "fda: ok" : "fda: denied - grant Full Disk Access to \(Paths.daemon)")
+}
+
 /// Possedere `/dev/console` non basta: a pagina di login il device node può restare
 /// intestato a un utente loggato in background. Lo stato vero lo sa solo la sessione,
 /// quindi lo si chiede dentro di essa con lo stesso binario (`--session-state`).
@@ -207,6 +231,16 @@ var lastAttempt = Date.distantPast
 var pendingSkip: Date?
 var armedWake: String?
 var job: Process?
+var lastFDAProbe = Date.distantPast
+var lastFDAOK: Bool?
+
+// La sonda parte subito, così l'app vede lo stato appena aperta.
+if config.limitedBackup {
+    lastFDAOK = probeFDA()
+    lastFDAProbe = Date()
+    writeFDAState(lastFDAOK!)
+    logFDA(lastFDAOK!)
+}
 
 while true {
     let now = Date()
@@ -214,17 +248,27 @@ while true {
         config = fresh
     }
 
-    if config.keepAwake {
+    let next = ScheduleLogic.nextRun(after: now, config: config)
+
+    // Con `keepAwake` il Mac resta sveglio per tutto il servizio. Senza, il risveglio
+    // armato lo porta in DarkWake ~2 minuti prima dello slot e senza un'asserzione si
+    // riaddormenta (~45 s) prima che arrivi l'orario: la si tiene solo in quella
+    // finestra, fino a quando il run non è partito.
+    let inWakeWindow = next.map {
+        ScheduleLogic.isWakeWindow(at: now, slot: $0, lead: wakeLead, grace: dueGrace)
+    } ?? false
+    if config.keepAwake || inWakeWindow {
         Power.preventSleep()
     } else {
         Power.allowSleep()
     }
 
-    // Il Mac è andato in stop: il run di quella notte è perso, e recuperarlo al risveglio
-    // non ha senso (Time Machine ripartirebbe a metà mattina).
+    // Il Mac è andato in stop. Un risveglio pmset può capitare ancora dentro la
+    // finestra utile: quel run si fa lo stesso, e recuperarlo a metà mattina non ha
+    // senso comunque — "missed" solo quando la finestra è davvero passata.
     if now.timeIntervalSince(lastTick) > sleepThreshold,
        let missed = ScheduleLogic.nextRun(after: lastTick, config: config),
-       missed <= now {
+       ScheduleLogic.isMissedSlot(at: now, slot: missed, grace: dueGrace) {
         let time = clockFormatter.string(from: missed)
         log("missed: Mac asleep at \(time)")
         notify("Backup missed at \(time): the Mac was asleep")
@@ -241,8 +285,21 @@ while true {
         notify("Backup skipped at \(time): no user was logged in")
     }
 
-    if let next = ScheduleLogic.nextRun(after: now, config: config) {
+    if let next {
         armWake(for: next, now: now, armed: &armedWake)
+    }
+
+    // Sonda Full Disk Access ogni 10 minuti finché l'opzione è accesa, così l'app vede
+    // anche quando il permesso viene concesso. Il log dice solo i cambi di stato.
+    if config.limitedBackup, job?.isRunning != true,
+       now.timeIntervalSince(lastFDAProbe) > 600 {
+        let ok = probeFDA()
+        lastFDAProbe = now
+        writeFDAState(ok)
+        if ok != lastFDAOK {
+            lastFDAOK = ok
+            logFDA(ok)
+        }
     }
 
     if job?.isRunning != true {
