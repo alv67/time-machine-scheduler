@@ -10,6 +10,13 @@ struct LastRun: Codable, Equatable {
     var excluded: Int?
 }
 
+/// Esito della sonda Full Disk Access: lo scrive il demone nel suo contesto launchd
+/// (l'unico in cui la verifica è fedele) e lo legge l'app per avvisare.
+struct FDAState: Codable, Equatable {
+    var fda: Bool
+    var checked: Date
+}
+
 /// Configurazione scritta dall'app e letta dal daemon.
 /// weekdays usa ISO-8601: 1 = lunedì … 7 = domenica.
 struct ScheduleConfig: Codable, Equatable {
@@ -55,6 +62,8 @@ enum Paths {
     static let config = supportDir + "/config.json"
     static let lastRun = supportDir + "/last-run.json"
     static let log = supportDir + "/tmscheduler.log"
+    /// Esito della sonda Full Disk Access del demone, letto dall'app.
+    static let fdaState = supportDir + "/fda-state.json"
     /// Data del risveglio armato con pmset, per poterlo annullare alla disinstallazione.
     static let wakeState = supportDir + "/wake"
     static let daemon = "/usr/local/bin/tmscheduler-daemon"
@@ -118,6 +127,20 @@ enum ScheduleLogic {
         guard now >= slot, now.timeIntervalSince(slot) < grace else { return false }
         guard let lastRun else { return true }
         return lastRun < slot
+    }
+
+    /// Finestra in cui tenere sveglio il Mac anche senza `keepAwake`: dal risveglio
+    /// armato (slot − lead) a slot + grace. Un DarkWake da `pmset schedule` si
+    /// riaddormenta in ~45 s se nessuno tiene un'asserzione di potenza.
+    static func isWakeWindow(at now: Date, slot: Date, lead: TimeInterval, grace: TimeInterval) -> Bool {
+        let dt = now.timeIntervalSince(slot)
+        return dt > -lead && dt < grace
+    }
+
+    /// Vero se lo slot è perso davvero: la finestra utile per partire è passata.
+    /// Un risveglio pmset può capitare ancora dentro la finestra: quel run si fa.
+    static func isMissedSlot(at now: Date, slot: Date, grace: TimeInterval) -> Bool {
+        now.timeIntervalSince(slot) >= grace
     }
 
     /// Host di una destinazione Time Machine; nil per destinazioni locali (file://).

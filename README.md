@@ -163,13 +163,13 @@ Help and About.
 - arm64 only: Intel Macs are not supported in this release.
 - Mac asleep with the lid closed: `caffeinate` does not prevent that kind of sleep;
   the job may start late or be unreliable.
-- The Mac must be **awake**, with an **unlocked session at the console** at the
-  scheduled time. Time Machine cannot read file-protection class A data (some caches
-  and preferences of every account) while the device is locked: a locked console
-  session makes the run abort with `BACKUP_FAILED_DEVICE_LOCKED` (RESULT 80), and
-  after a logout it always does. Verified on macOS 27.2: an assertion taken by a
-  third-party process has no effect, SSH does not unlock the device, and excluding
-  the protected paths does not help either.
+- The Mac must be **awake**, with a session at the console at the scheduled time.
+  Time Machine cannot read file-protection class A data (some caches and
+  preferences of every account) while the device is locked: without the
+  **Learned exclusions** option a locked console session aborts the run with
+  `BACKUP_FAILED_DEVICE_LOCKED` (RESULT 80), and after a logout it always does.
+  Verified on macOS 27.2: an assertion taken by a third-party process has no
+  effect, and SSH does not unlock the device.
 - The account at the console does not have to be yours: an empty standard account
   left logged in and unlocked works, so your own session can stay locked. Verified:
   with that account at the console Time Machine logs `Device unlocked: true` and
@@ -178,14 +178,18 @@ Help and About.
   (`skip: no user at the console`) and notified at the next login, instead of wasting
   minutes of copying on a backup that cannot be published.
 - A wake is armed two minutes before the scheduled time (`pmset schedule wake`), so
-  an idle sleep does not lose the run. A powered-off Mac, or a reboot with nobody
-  logged in, still does; a missed run is logged and notified when the Mac wakes.
+  an idle sleep does not lose the run. While "Prevent the Mac from going to sleep"
+  is off, the daemon holds a power assertion only from the armed wake to the end of
+  the due window: a DarkWake goes back to sleep in under a minute without one,
+  before the scheduled time arrives. A powered-off Mac, or a reboot with nobody
+  logged in, still loses the run; a missed run is logged and notified when the Mac
+  wakes — and a Mac that wakes still inside the due window runs its backup instead.
 - A backup skipped because the Mac was off or asleep is not caught up later; the
   next one runs at the next scheduled time.
-- A limited backup is missing the folders listed in the learned exclusions (by
-  default `Containers`, `Group Containers`, `Preferences`, `Application Scripts` and
-  `Weather` of every account) for that run. The next complete run brings them back,
-  but a restore from that snapshot does not have them.
+- A limited backup is missing the folders listed in the learned exclusions (the
+  `Library` of every account plus `/private/var/folders`) for that run. The next
+  complete run brings them back, but a restore from that snapshot does not have
+  them.
 - "Prevent the Mac from going to sleep" keeps the Mac awake for as long as the
   service is active: more power and heat, and the battery drains on battery
   power. The display can still sleep. A Mac with the lid closed and no external
@@ -239,6 +243,7 @@ is updated.
 - `/Library/Application Support/TMScheduler/wake` (date of the armed wake)
 - `/Library/Application Support/TMScheduler/exclusions-learned.txt` (paths to exclude)
 - `/Library/Application Support/TMScheduler/temporary-exclusions.txt` (only during a run)
+- `/Library/Application Support/TMScheduler/fda-state.json` (Full Disk Access probe)
 - `/Library/LaunchDaemons/local.tmscheduler.plist`
 - `/usr/local/bin/tmscheduler-daemon`
 - `/usr/local/bin/tmscheduler-run`
@@ -323,12 +328,22 @@ Then the daemon does one job:
 can and then refuses to publish, listing the paths it could not read
 (`Failed to backup N paths which are inaccessible while device is locked`). On failure
 the job reads that list from the unified log, groups the entries by folder — the deepest
-level that keeps at most 10 entries per account — and saves it in
-`exclusions-learned.txt`. On the next run it adds exactly those paths to Time Machine's
-exclusions (`SkipPaths`), runs, and removes them again: only paths the job added are
-removed, the user's own exclusions are untouched, and a leftover list from an
-interrupted run is cleaned at the next start. The run is recorded with
-`"limited": true` and the number of excluded paths.
+level that keeps at most 2 entries per account, which ends up being the `Library` of
+each account plus `/private/var/folders` — and saves it in `exclusions-learned.txt`.
+On the next run it adds exactly those paths to Time Machine's exclusions
+(`SkipPaths`), runs, and removes them again: only paths the job added are removed, the
+user's own exclusions are untouched, and a leftover list from an interrupted run is
+cleaned at the next start. The run is recorded with `"limited": true` and the number
+of excluded paths. Verified end to end on macOS 27.2 with the device locked: the
+snapshot publishes and the original exclusions are restored.
+
+Writing `SkipPaths` is a protected operation: the kernel denies it to any process
+without Full Disk Access (`sshd` is subject to the same protection). Grant it **once**
+to `/usr/local/bin/tmscheduler-daemon` in System Settings → Privacy & Security →
+Full Disk Access; the app shows a red banner linking there when it is missing. The
+daemon probes at startup and every 10 minutes while the option is on, and every write
+is verified by reading the preference back: a denied write is reported, never
+assumed. A notarized, Developer-ID build will keep the grant stable across updates.
 
 With `~/Library` excluded the backup no longer contains preferences, containers and
 caches of any account: documents, photos and projects are still there.

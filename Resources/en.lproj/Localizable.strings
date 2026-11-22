@@ -6,6 +6,10 @@
 "banner.hint" = "Open Settings and choose “Manually” to avoid duplicate backups.";
 "banner.button" = "Open Time Machine Settings";
 
+"fda.title" = "The daemon is missing Full Disk Access";
+"fda.hint" = "With the screen locked the backup cannot write its exclusions and fails. Add /usr/local/bin/tmscheduler-daemon in Full Disk Access.";
+"fda.button" = "Open Full Disk Access";
+
 "schedule.enabled" = "Schedule enabled";
 "schedule.time" = "Start time";
 
