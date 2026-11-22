@@ -1,51 +1,52 @@
-# Time Machine Scheduler 0.1.0
+# Time Machine Scheduler 0.2.0
 
-First public release.
+Nightly backups that survive a locked screen. The headline scenario — lock the
+Mac, let it sleep, it wakes for the scheduled time and publishes — is verified
+end to end on macOS 27.2 with the device locked.
 
-Time Machine Scheduler lets you run Time Machine backups on specific days and
-times, instead of relying on the interval anchored to the last completed backup.
+## Highlights since 0.1.0
 
-## Highlights
-
-- Schedule with configurable time and weekdays.
-- Enable/disable toggle and **Back up now**.
-- Skips when the destination is unreachable, the Mac is on battery, or a backup is
-  already running.
-- Prevents idle sleep during the backup and notifies you when it ends.
-- Shows Time Machine status, last and next backup, and a readable rotating log.
-- Clean restore: removes the daemon and puts Time Machine back on the frequency you
-  choose.
+- **Swift daemon** replaces the shell job: it holds a power assertion, arms a
+  `pmset` wake two minutes before the scheduled time, skips the run when nobody
+  is logged in, and logs missed runs when the Mac slept through them.
+- **Honest outcomes**: `tmutil startbackup --block` exits 0 even when the backup
+  fails, so the result is decided by what the destination really contains,
+  detected while the run is still going.
+- **Standby support**: with "Prevent the Mac from going to sleep" off, the
+  daemon holds a power assertion only in the armed-wake window, because a
+  DarkWake goes back to sleep in under a minute; and a Mac that wakes still
+  inside the due window runs its backup instead of being reported missed.
+- **Learned exclusions** (opt-in): a locked screen no longer loses the night.
+  The paths Time Machine cannot read are learned from the failed run, grouped
+  to the `Library` of each account plus `/private/var/folders`, and excluded
+  only for the next run; the backup publishes as *limited* and the original
+  exclusions are restored. Every write is verified by reading the preference
+  back, and a denied write is reported, never assumed.
+- **Full Disk Access probe**: writing Time Machine's exclusions is a protected
+  operation, so the daemon needs Full Disk Access once — the same protection
+  `sshd` is subject to. The app shows a red banner with a direct link when the
+  grant is missing, and clears it on its own once granted.
 - Italian and English UI.
 
 ## Install
 
-1. Download `TimeMachineScheduler-0.1.0.dmg` and open it.
+1. Download `TimeMachineScheduler-0.2.0.dmg` and open it.
 2. Drag **TimeMachineScheduler.app** into Applications.
 3. Open the app and click **Save schedule** (admin password required).
+4. If you enable "Exclude unreachable paths during the backup", grant Full Disk
+   Access to `/usr/local/bin/tmscheduler-daemon` when the app asks for it.
 
 Requirements: macOS 14+, Apple Silicon, a configured Time Machine destination.
 
 ### Gatekeeper
 
 The app is ad-hoc signed and not notarized. If macOS blocks it, use **System
-Settings → Privacy & Security → Open Anyway**, or run:
+Settings → Privacy & Security → Open Anyway**, or clear the quarantine flag:
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/TimeMachineScheduler.app
 ```
 
-The DMG includes a readme with the same instructions.
-
-## Known limitations
-
-- A powered-off Mac cannot be woken (Apple Silicon has no `poweron`).
-- arm64 only; Intel Macs are not supported in this release.
-- `caffeinate` does not prevent sleep with the lid closed; the job may start late or
-  be unreliable.
-- The app only needs to be open to use it; the daemon runs on its own.
-- Time Machine should be set to "Manually" to avoid duplicate backups; the app warns
-  you when it is not.
-
-## Verify downloads
-
-Use `SHA256SUMS.txt` attached to this release.
+Note for the daemon's Full Disk Access grant: with an ad-hoc signature the
+grant is tied to the exact binary and must be re-granted after every update.
+A notarized, Developer-ID build will keep it stable across releases.
